@@ -20,7 +20,7 @@ skill content, to start.
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
-| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from a real (unmerged) reference implementation: IIIF deep-zoom images |
+| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs for special embed handling) without adding a whole new item type — a much lighter, mostly compile-time-enforced pattern, generalized from two real (unmerged) reference implementations: SoundCloud and Spotify embeds |
 
 ## Using these skills
@@ -63,8 +63,14 @@ during review, in case future editors hit the same trap:
   something like them does.
 - Same story for `tapestry-content-types`, built from `iiif-upstream` (a single clean
   commit, but this one directly on top of upstream `asteasolutions/main` rather than
-  `dbvisel/main`). IIIF image support doesn't exist on any default branch either — again,
-  a pattern to follow, not a feature to claim exists.
+  `dbvisel/main`) plus, later, the `model3d` item type on branch `wikimania-mess` — one
+  giant, deliberately-flagged-messy commit ("Everything added for Wikimania") that bundles
+  in a lot of unrelated work; only the lines actually touching `model3d` were used. Neither
+  IIIF nor `model3d` support exists on any default branch — again, patterns to follow, not
+  features to claim exist. The second example was folded in specifically because it
+  revealed real gaps the first alone had left the skill overstating (e.g. that a bespoke
+  item factory is always necessary — `model3d` shows the far more common case of reusing
+  the existing generic file-matching factory instead).
 - `tapestry-webpage-types` is built from two small commits on `iiif-image-support`, a
   branch explicitly flagged by its own author as dirty/not up to date. One expected example
   (a `wikipedia` webpage type) turned out not to actually exist on that branch — verified by

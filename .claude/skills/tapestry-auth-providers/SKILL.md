@@ -25,7 +25,6 @@ MediaWiki login already works; use these as the template for building a *new* on
 
 - "Add \<X\> as a login option to Tapestries"
 - "How do I plug in a new OAuth provider?"
-- Reviewing/reviving the `orcid-login` or `mediawiki-login` branches themselves
 
 ## The two provider shapes
 

@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to asteasolutions/tapestry-project while changing as little as possible — the full checklist generalized from a real, complete reference implementation (IIIF deep-zoom images) on an unmerged fork branch, including the easy-to-miss export-version bump
+description: Add a new canvas content/item type to asteasolutions/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -13,18 +13,27 @@ last_verified: 2026-08-12
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
 alongside the ones that ship today (`text`, `actionButton`, `audio`, `book`, `image`,
-`pdf`, `video`, `webpage` — see `tapestry-client-features`). Generalized from a real,
-complete reference implementation — IIIF deep-zoom image support — on an unmerged branch
-of a fork (`dbvisel/tapestry-project` branch `iiif-upstream`, a single clean commit
-directly on top of upstream `asteasolutions/tapestry-project` `main`). **IIIF support does
-not exist on any current branch of `asteasolutions/tapestry-project`** — it's a reference
-example for this skill, not an implemented feature. Don't tell a user IIIF items already
-work; use this as the template for adding a *new* type.
+`pdf`, `video`, `webpage` — see `tapestry-client-features`). Generalized from two real,
+complete reference implementations on unmerged fork branches:
+
+- **IIIF deep-zoom image support** — `dbvisel/tapestry-project` branch `iiif-upstream`, a
+  single clean commit directly on top of upstream `asteasolutions/tapestry-project` `main`.
+- **STL 3D model viewing (`model3d`)** — one part of a single giant, admittedly messy
+  commit ("Everything added for Wikimania") on branch `wikimania-mess`, which bundles in a
+  lot of unrelated work. Only the files/lines that actually touch `model3d` were used here
+  — the rest of that commit was deliberately ignored as noise.
+
+**Neither IIIF nor `model3d` support exists on any current branch of
+`asteasolutions/tapestry-project`** — both are reference examples for this skill, not
+implemented features. Don't tell a user either one already works; use this as the template
+for adding a *new* type. The two examples are complementary: IIIF needed real async
+resolution logic and a dedicated item factory; `model3d` needed neither, and instead
+surfaces a lighter, more common path (reusing the existing simple-file-matching factory)
+that IIIF alone would have made this skill overstate as always-necessary.
 
 ## When to use this skill
 
 - "Add \<X\> as a new item/content type to Tapestries"
-- Reviewing/reviving the `iiif-upstream` branch itself
 - Any task that touches `MediaItemSchema`, `ItemType`, or the per-item-type maps this
   skill catalogs below
 
@@ -82,20 +91,26 @@ lowercase-`type`/PascalCase-class convention exactly.
    dispatcher (add `if (item.type === '<x>') return resolve<X>Source(item)` at the top —
    don't rename or restructure that dispatcher). Gate on the existing
    `item.skipSourceResolution` flag, per the principle above.
-7. **`server/src/transformers/item.ts`** — in `itemDbToDto`: add a `type === '<x>'`
-   branch that spreads `commonProps`/`commonMediaItemProps` plus the new field(s). In
-   `itemDtoToDb`'s field-selection predicate: add a line so the new DB column is only
-   populated `if (field === '<newField>') return item.type === '<x>'` — **this one is not
-   type-checked**; forgetting it means the column silently stays null on write. Also add
-   the new column to the `DB_TO_DTO_FIELD_MAP` if it needs the dotted-path mapping other
+7. **`server/src/transformers/item.ts`** — in `itemDbToDto`: if your new type's DTO shape
+   is identical to an existing branch's (no new field, just `commonProps`/`commonMediaItemProps`
+   as-is — true of `model3d`, whose schema adds no new column at all), **extend that
+   branch's condition** (`if (type === 'image' || type === 'book' || type === '<x>')`)
+   rather than writing a near-duplicate new branch. Only add a genuinely new branch when
+   you actually have new field(s) to spread in (as IIIF's `imageService` did). Either way,
+   if you did add a new column: in `itemDtoToDb`'s field-selection predicate, add a line so
+   it's only populated `if (field === '<newField>') return item.type === '<x>'` — **this one
+   is not type-checked**; forgetting it means the column silently stays null on write. Also
+   add the new column to the `DB_TO_DTO_FIELD_MAP` if it needs the dotted-path mapping other
    fields use.
 8. **`server/src/tasks/thumbnail-generators/index.ts`** — if the type has a derivable
    thumbnail, add it to `ITEM_TYPES_WITH_INHERENT_THUMBNAIL` (a plain array — **not**
    type-checked against `ItemType`, so double-check the spelling) and add a branch in
-   `generatePrimaryThumbnail`. The reference implementation's branch delegates to the
-   *existing* `generateImageThumbnail` on a derived flat-image URL rather than writing a
-   new image-thumbnailing routine — look for a similar shortcut before writing a new
-   generator from scratch.
+   `generatePrimaryThumbnail`. IIIF's branch delegates to the *existing*
+   `generateImageThumbnail` on a derived flat-image URL rather than writing a new
+   image-thumbnailing routine — look for a similar shortcut before writing a new generator
+   from scratch. **This whole step is genuinely optional** — `model3d` skips it entirely
+   (no inherent-thumbnail branch, no generator, nothing) and that's a legitimate choice when
+   there's no cheap way to derive a flat preview image; the item just has no thumbnail.
 9. **`server/src/services/tapestry-import-service.ts`** — add the type to the `isMediaItem`
    predicate (another plain `||` chain, not type-checked) and, in the field-copy logic for
    duplicating/importing a tapestry, copy the new field(s) across
@@ -104,11 +119,24 @@ lowercase-`type`/PascalCase-class convention exactly.
 ### 3. Client rendering (core-client generic + client editor-specific)
 
 10. **`core-client/src/components/tapestry/items/<x>/`** — new component folder: a
-    `viewer.tsx` (or similarly named file) holding the actual rendering logic (the
-    reference implementation's OpenSeadragon deep-zoom viewer lives entirely here, reading
-    the new field via `useTapestryConfig().useStoreData`), and an `index.tsx` wrapping it
-    in `<TapestryItem>` with the generic `<ItemToolbar>`. This is the component both the
-    real app (`client`) and the standalone `viewer` app can fall back to.
+    `viewer.tsx` (or similarly named file) holding the actual rendering logic (IIIF's
+    OpenSeadragon deep-zoom viewer lives entirely here, reading the new field via
+    `useTapestryConfig().useStoreData`), and an `index.tsx` wrapping it in `<TapestryItem>`
+    with the generic `<ItemToolbar>`. This is the component both the real app (`client`)
+    and the standalone `viewer` app can fall back to.
+
+    **If the viewer owns a continuous render loop** (e.g. a WebGL/three.js scene driven by
+    `requestAnimationFrame`, as `model3d`'s viewer is — unlike OpenSeadragon, which handles
+    its own internal resize/render), you additionally need to:
+    - **Observe the container's own resize yourself** (`useResizeObserver` on the
+      containing `ref`, updating the renderer's size and the camera's aspect ratio) — Pixi
+      resizing the surrounding stage item does not automatically propagate into an
+      imperatively-managed child canvas.
+    - **Tear down every GPU resource on cleanup**, not just stop the loop: cancel the
+      `requestAnimationFrame` handle, `dispose()` geometry/material/renderer objects, and
+      remove the canvas element — a bare `cancelAnimationFrame` without disposing the
+      underlying WebGL context leaks GPU memory across every mount/unmount of the item
+      (e.g. scrolling it off-canvas and back).
 11. **`core-client/src/components/tapestry/index.tsx`** — register the new component in
     `TapestryConfigProvider`'s default components map. `TapestryComponentsConfig`'s type
     (`Record<ItemComponentName<...>, ...>`) makes this a **compile error if you skip it** —
@@ -120,7 +148,11 @@ lowercase-`type`/PascalCase-class convention exactly.
 13. **`core-client/src/components/tapestry/search/search-pane/use-search-results.ts`** —
     add an icon for the type to `itemIcons: Record<ItemType, IconName>`. **This one *is*
     type-checked** (`Record<ItemType, ...>` — same forcing-function pattern as step 11)
-    — TypeScript will refuse to compile until you add it.
+    — TypeScript will refuse to compile until you add it. Optionally, also add search
+    keyword synonyms to `itemTypeSynonyms: Partial<Record<ItemType, string[]>>` in the same
+    file (e.g. `model3d: ['3d', 'stl', 'model', 'mesh']`) — this one is a `Partial` map, so
+    it's genuinely optional and not compiler-enforced; skip it if there's nothing obvious
+    to add.
 14. **`client/src/components/tapestry-elements/items/<x>/index.tsx`** — the
     editor-specific wrapper: same shape as core-client's version, but using
     `useTapestryData`/`buildToolbarMenu`/`useItemToolbar` (the richer, editor-aware
@@ -133,23 +165,47 @@ lowercase-`type`/PascalCase-class convention exactly.
 
 ### 4. Client creation (item factory, sizing)
 
-16. **`client/src/stage/item-factories.ts`** — add a new `ItemFactory`: recognize sources
-    for this type (URL pattern / metadata probing — the reference checks both an Internet
-    Archive item URL and a direct manifest URL), resolve whatever's needed using your new
-    `core/` module, build the item via the existing `createMediaItem(type, source, tapestryId)`
+16. **`client/src/stage/item-factories.ts`** — **check first whether you need a bespoke
+    factory at all.** If the type is just "a file recognized by MIME type (and/or filename
+    extension)" — true of most binary asset types, and of `model3d` — reuse the existing
+    generic `createSimpleMediaItemFactory('<x>', matcherFn)` (already used for
+    `pdf`/`video`/`audio`) instead of writing a new one-off `ItemFactory`:
+    ```ts
+    createSimpleMediaItemFactory(
+      '<x>',
+      (source, mediaType) => mediaType === '<expected-mime-type>' ||
+        (source instanceof File && source.name.toLowerCase().endsWith('.<ext>')),
+    )
+    ```
+    **Don't trust MIME type alone for niche formats.** `model3d`'s matcher also falls back
+    to a filename-extension check (`.stl`) because STL has no single standard MIME type
+    (`model/stl` and the older `application/sla` both appear in the wild) and browsers
+    frequently report no MIME type at all for a locally-picked file of an uncommon format.
+
+    Only write a genuinely new `ItemFactory` (as IIIF's does) when creation needs real
+    **async resolution logic** first — fetching/parsing a manifest, calling an API to
+    validate or normalize the source, etc. In that case: recognize sources for this type
+    (URL pattern / metadata probing), resolve whatever's needed using your new `core/`
+    module, build the item via the existing `createMediaItem(type, source, tapestryId)`
     helper, set any type-specific fields on the returned item, and set
     `item.skipSourceResolution = true` if you've already done resolution the server would
-    otherwise redo. Insert it into the `ITEM_FACTORIES` array at the right priority — before
-    any catch-all factory (`webpageItemFactory` is always last), and before/after
+    otherwise redo.
+
+    Either way, insert the factory into the `ITEM_FACTORIES` array at the right priority —
+    before any catch-all factory (`webpageItemFactory` is always last), and before/after
     IA-collection handling depending on whether your type should intercept IA URLs first.
     Return `null` (not throw) for anything that isn't actually your type, so later factories
     still get a chance.
 17. **`client/src/lib/media.ts`** — add a `get<X>ItemSize(source)` function computing the
-    item's default/initial size (e.g. derive an aspect ratio from fetched metadata, or a
-    fixed default).
-18. **`client/src/model/data/utils.ts`** — register it in
+    item's default/initial size, **if** there's a meaningful intrinsic size/aspect ratio to
+    derive (e.g. from fetched metadata). If there isn't — `model3d` has no natural 2D aspect
+    ratio to speak of — just use a fixed default directly in the next step instead of adding
+    a function here at all.
+18. **`client/src/model/data/utils.ts`** — register the type in
     `itemSizes: Record<ItemType, Size | ((source) => Promise<Size>)>` — another
-    type-checked forcing function (step 11/13's pattern again).
+    type-checked forcing function (step 11/13's pattern again). The value can be either a
+    plain `{ width, height }` object (what `model3d` uses) or the async function from the
+    previous step — both are valid, pick whichever fits.
 
 ### 5. Export/version compatibility — easy to miss, not type-checked
 
@@ -197,6 +253,13 @@ lowercase-`type`/PascalCase-class convention exactly.
    compiler catches a missing entry; `ITEM_TYPES_WITH_INHERENT_THUMBNAIL`, `isMediaItem()`,
    and the `itemDtoToDb` field-selection predicate are plain arrays/conditionals the
    compiler does **not** check — verify these by hand.
-6. See `tapestry-client-features` for the surrounding client architecture (stage/controller
+6. **Prefer the generic `createSimpleMediaItemFactory` matcher over a bespoke `ItemFactory`**
+   whenever the type is recognized by MIME type/extension alone, and fall back to a
+   filename-extension check for formats with no reliable MIME type. Reserve a bespoke
+   factory for types that genuinely need async resolution before item creation.
+7. **A continuous-render viewer (WebGL/three.js/etc.) must observe its own container
+   resize and dispose GPU resources on cleanup** — don't assume the surrounding Pixi stage
+   handles either for you.
+8. See `tapestry-client-features` for the surrounding client architecture (stage/controller
    pattern, workspace boundaries) and `tapestry-server-worker` for the surrounding backend
    architecture (REST resource conventions, Prisma migrations) this checklist plugs into.
