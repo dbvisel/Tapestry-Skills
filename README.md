@@ -24,6 +24,7 @@ skill content, to start.
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from three real (unmerged) reference implementations of that extension |
+| [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 
 ## Using these skills
 
@@ -96,3 +97,12 @@ during review, in case future editors hit the same trap:
   upstream functionality; only the three new collection types are unmerged. Single-file
   import is deliberately scoped to one item at a time; the bulk/collection picker mechanism
   it originally left out of scope is exactly what `tapestry-collection-imports` covers.
+- `tapestry-viewer-embedding` is different from every skill above: `/viewer` itself is real,
+  existing upstream code (deliberately minimal — no auth, no sockets, `core-client`-only,
+  see `tapestry-client-features`), and neither reference integration touches its source at
+  all. A WordPress block and a macOS drag-and-drop opener were found in the same unmerged
+  exploratory work as several skills above, and — independently of each other — converge on
+  the exact same packaging recipe (`vite build --base=./`, copy into the host's own resource
+  folder, serve over a real http(s) origin since ES modules can't load under `file://`,
+  point at the unmodified `?source=<url>` param). Neither integration exists on any default
+  branch; the recipe they demonstrate is the durable artifact.
