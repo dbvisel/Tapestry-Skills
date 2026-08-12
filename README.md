@@ -21,7 +21,7 @@ skill content, to start.
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
-| [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs for special embed handling) without adding a whole new item type — a much lighter, mostly compile-time-enforced pattern, generalized from two real (unmerged) reference implementations: SoundCloud and Spotify embeds |
+| [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from three real (unmerged) reference implementations: SoundCloud, Spotify, and Wikipedia |
 
 ## Using these skills
 
@@ -71,8 +71,12 @@ during review, in case future editors hit the same trap:
   revealed real gaps the first alone had left the skill overstating (e.g. that a bespoke
   item factory is always necessary — `model3d` shows the far more common case of reusing
   the existing generic file-matching factory instead).
-- `tapestry-webpage-types` is built from two small commits on `iiif-image-support`, a
-  branch explicitly flagged by its own author as dirty/not up to date. One expected example
-  (a `wikipedia` webpage type) turned out not to actually exist on that branch — verified by
-  a full-text search before writing anything — so the skill only uses the two that do:
-  SoundCloud and Spotify embeds. Neither exists on any default branch either.
+- `tapestry-webpage-types` is built from two small commits on `iiif-image-support` (dirty,
+  not up to date per its own author) plus, later, a `wikipedia` webpage type — which does
+  turn out to be real, just on `wikimania-mess` rather than `iiif-image-support` where it
+  was first (and correctly) found not to exist. Wikipedia's implementation is a genuinely
+  different strategy from SoundCloud/Spotify: instead of iframing a rewritten embed URL, it
+  fetches the article via the Wikipedia REST API and renders sanitized DOM directly in a
+  fully custom component — revealing a whole dispatch mechanism (a per-`webpageType`
+  component override, optional and client-only) the skill didn't cover until this was
+  folded in. None of the three exists on any default branch.

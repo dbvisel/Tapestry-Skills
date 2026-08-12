@@ -1,31 +1,39 @@
 ---
 name: tapestry-webpage-types
-description: Add a new known webpage type to asteasolutions/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed handling, without adding a whole new item type. Generalized from two real reference implementations (SoundCloud, Spotify) on an unmerged, dirty fork branch
+description: Add a new known webpage type to asteasolutions/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed OR fully custom DOM-rendering treatment, without adding a whole new item type. Generalized from three real reference implementations (SoundCloud, Spotify, Wikipedia) on two unmerged, dirty fork branches
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["KNOWN_WEBPAGE_TYPES", "WebpageType", "WEB_SOURCE_PARSERS", "web source parser"]
-  - keywords: ["soundcloud embed", "spotify embed", "recognize URL", "special webpage handling"]
-  - keywords: ["findWebSourceParser", "webpageItemFactory", "ALLOWED_ORIGINS"]
+  - keywords: ["soundcloud embed", "spotify embed", "wikipedia article", "recognize URL", "special webpage handling"]
+  - keywords: ["findWebSourceParser", "webpageItemFactory", "ALLOWED_ORIGINS", "DOMPurify", "dangerouslySetInnerHTML"]
 last_verified: 2026-08-12
 ---
 
 Checklist for adding a new **known webpage type** — recognizing a specific site's URLs
-(e.g. `soundcloud.com`) and giving them special embed/rendering treatment — as opposed to
-adding a whole new canvas **item type** (see `tapestry-content-types` for that heavier
-pattern). Generalized from two real, complete reference implementations — SoundCloud and
-Spotify embed support — on an unmerged, admittedly dirty fork branch
-(`dbvisel/tapestry-project` branch `iiif-image-support`, two small commits mixed in among
-unrelated work). **Neither SoundCloud nor Spotify embed support exists on any current
-branch of `asteasolutions/tapestry-project` or any default fork branch** — these are
-reference examples for this skill, not implemented features.
+(e.g. `soundcloud.com`) and giving them special rendering treatment — as opposed to adding
+a whole new canvas **item type** (see `tapestry-content-types` for that heavier pattern).
+Generalized from three real, complete reference implementations on two unmerged, dirty
+fork branches:
 
-One thing to flag explicitly: this branch was expected to also add a `wikipedia` webpage
-type, but it doesn't — a full-text search of the branch turns up nothing beyond an
-unrelated mention in an AI-chat test fixture. Only `soundcloud` and `spotify` are real,
-complete examples here. Don't assume a `wikipedia` webpage type exists anywhere, or invent
-one from the name alone.
+- **SoundCloud and Spotify embeds** — two small commits on `iiif-image-support`, mixed in
+  among unrelated work. Both rewrite the pasted URL to the site's embed/widget endpoint and
+  still render via the generic iframe.
+- **Wikipedia articles** — part of one giant commit ("Everything added for Wikimania") on
+  branch `wikimania-mess`. A meaningfully more involved variant: instead of iframing
+  anything, it fetches the article's content via the Wikipedia REST API and renders it as
+  sanitized DOM directly inside a fully custom item component.
+
+**None of SoundCloud, Spotify, or Wikipedia support exists on any current branch of
+`asteasolutions/tapestry-project` or any default fork branch** — these are reference
+examples for this skill, not implemented features.
+
+One correction from an earlier pass: a `wikipedia` webpage type was initially checked for
+on `iiif-image-support` and found not to exist there (only a stray mention in an AI-chat
+test fixture) — it turned out to be real, just on a different branch (`wikimania-mess`)
+than first assumed. Both facts stand: it doesn't exist on `iiif-image-support`, and it does
+exist, as a complete reference implementation, on `wikimania-mess`.
 
 ## When to use this skill
 
@@ -52,7 +60,23 @@ maybe how its thumbnail is generated.
 
 **Reach for `tapestry-content-types` instead when**: the content needs a genuinely
 different rendering surface — a Pixi canvas element, a deep-zoom viewer, anything that
-isn't "point an iframe at a (possibly rewritten) URL."
+isn't "render a webpage item, one way or another."
+
+## Two ways to render a new webpage type
+
+Within this skill there are two genuinely different rendering strategies, and picking the
+right one matters:
+
+| Strategy | Example | What `construct()` returns | Rendering |
+|---|---|---|---|
+| **Rewrite to an embed URL, still iframe it** | SoundCloud, Spotify | The site's dedicated embed/widget endpoint | The existing generic `webpage` iframe viewer, unmodified |
+| **Fetch content, render as DOM directly** | Wikipedia | The canonical page URL, unchanged (there's no embed URL to build) | A fully custom item component — no iframe at all |
+
+Use the first when the site *has* an embeddable widget/player endpoint. Use the second when
+it doesn't, but has an API that returns content you can render more usefully than framing
+the whole page (which typically drags in site chrome/navigation that doesn't fit a canvas
+item). The rest of this checklist covers the first strategy in steps 1-8 (identical to
+before) and the second in steps 9-13.
 
 ## The checklist
 
@@ -69,7 +93,11 @@ isn't "point an iframe at a (possibly rewritten) URL."
    - `matches(url)`: `try { const { host } = new URL(url); return Promise.resolve(host === '<x>.com' || host.endsWith('.<x>.com')) } catch { return Promise.resolve(false) }` — defensive URL parsing, host-based sniffing.
    - `parse(source)`: returns `{ source: <rewritten-or-passthrough-url> }`.
    - `construct(params)`: returns the actual URL to store/iframe — usually the site's
-     dedicated embed/widget endpoint, not the page the user pasted.
+     dedicated embed/widget endpoint, not the page the user pasted. **For the
+     fetch-and-render strategy** (no embed URL exists), `construct` can legitimately just
+     return the canonical page URL unchanged — Wikipedia's does exactly this; the parser's
+     job there is purely URL *recognition* and *canonicalization*, not rewriting to
+     something iframeable.
    - **Make `parse`/`construct` idempotent**: both reference parsers detect whether they've
      already been given their own embed URL (vs. the original public URL) and normalize
      either input to the same output. This matters because the webpage viewer **re-runs
@@ -129,6 +157,56 @@ isn't "point an iframe at a (possibly rewritten) URL."
    plain `if (webpageType === '<x>')` check — not type-checked, and skipping it is often the
    right call, not an oversight.
 
+### Fetch-and-render strategy — steps 9-13, only when there's no embed URL to iframe
+
+9. **`core/src/<x>.ts`** (new file, separate from the web-source parser) — the actual
+   content-fetching logic: pure, framework-free functions that hit whatever API the site
+   provides and return plain data/HTML. Wikipedia's version has three: fetch the article
+   body HTML, fetch its display title, fetch its categories — each independently
+   fault-tolerant (e.g. categories fail silently to an empty array, since they're
+   supplementary, not core content). Keep this separate from `core/src/web-sources/<x>.ts`
+   — the parser's job is URL recognition/canonicalization; this module's job is fetching
+   the actual content once you already have a recognized source.
+10. **`client/src/components/tapestry-elements/items/<x>-page/index.tsx`** (new file,
+    **client-only — no `core-client` counterpart is required**) — the custom item
+    component. Fetch via your new `core/` module (wrap in the existing `useAsync` hook from
+    `tapestry-core-client/src/components/lib/hooks/use-async`, matching the idiomatic
+    component shape from `tapestry-content-types`), then render the result — typically with
+    `dangerouslySetInnerHTML` for fetched HTML content.
+    - **Sanitize before `dangerouslySetInnerHTML`, always.** Use DOMPurify (or equivalent)
+      on every piece of fetched content you render this way, including secondary fields
+      like a display title — a public API endpoint is not a trust boundary against the
+      *content* it serves; treat it exactly like user-supplied HTML.
+    - **Rewrite relative and protocol-relative URLs to absolute** in the fetched content
+      before rendering — content fetched via `fetch()` has no natural base URL the way a
+      normally-loaded page does, so `./Other_Page`-style links and `//example.com/...`-style
+      asset URLs will resolve wrong (or not at all) once injected into your component's DOM.
+    - **Force external links to open in a new tab** (`target="_blank"`,
+      `rel="noopener noreferrer"`) rather than navigate the canvas away — a link click
+      inside a canvas item should never leave the tapestry.
+11. **`client/src/pages/tapestry/tapestry-loader.tsx`** — register the custom component as
+    a per-`webpageType` override on the `webpage` item's entry:
+    `WebpageItem: { default: WebpageItem, iaWayback: WaybackPageItem, <x>: <X>Item }`.
+    **This override is optional and not compile-time-enforced** — unlike a whole new
+    `ItemType` (where `TapestryComponentsConfig` forces every consumer to supply a
+    component), skipping this line just means the webpage item renders via the plain iframe
+    `default` everywhere the override isn't registered. That's a feature, not a gap: the
+    standalone `viewer` app (which only reads `core-client`'s defaults, per
+    `tapestry-client-features`) automatically degrades to a plain iframe of the same stored
+    URL, with zero extra work, since there's no equivalent override table in `core-client`
+    to also update.
+12. **Re-derive structured data from the stored URL at render time**, via the *same*
+    parser's `parse()` method, rather than adding new DB columns for it. Wikipedia's item
+    component calls `WEB_SOURCE_PARSERS.wikipedia.parse(dto.source)` to get `{ lang, title }`
+    back out of the canonical URL on every render — the webpage item's schema still only
+    has `source`, untouched. This is the fetch-and-render strategy's version of the
+    "additive schema changes" principle from `tapestry-content-types`.
+13. **Reuse the toolbar mechanism, and add type-specific controls to it if useful** —
+    `useItemToolbar`/`buildToolbarMenu` (see `tapestry-content-types`'s component-shape
+    notes) still applies; Wikipedia's component prepends a "reload this article" and "view
+    on Wikipedia" button to the standard controls rather than replacing the toolbar
+    mechanism with something bespoke.
+
 ## Guardrails
 
 1. **Default to this pattern over a whole new `ItemType`** whenever the content is "a web
@@ -145,6 +223,12 @@ isn't "point an iframe at a (possibly rewritten) URL."
    intercept). Don't add one reflexively.
 5. **Treat `ALLOWED_ORIGINS`/the iframe `allow` attribute as a shared resource** — every
    addition affects every existing webpage type's embed, not just the new one.
-6. See `tapestry-content-types` for the heavier pattern this one deliberately avoids, and
+6. **Never render fetched content with `dangerouslySetInnerHTML` unsanitized.** This
+   applies to every field pulled from an external API, not just the main body — a "trusted"
+   endpoint is not a trust boundary against the content it happens to serve.
+7. **A per-`webpageType` component override is optional and client-only.** Skipping it is a
+   valid choice (the plain iframe default still renders the item everywhere, including the
+   standalone `viewer` app), not a checklist item you're required to complete.
+8. See `tapestry-content-types` for the heavier pattern this one deliberately avoids, and
    `tapestry-server-worker` for the `resolveWebSource`/REST resource machinery this
    plugs into for free.
