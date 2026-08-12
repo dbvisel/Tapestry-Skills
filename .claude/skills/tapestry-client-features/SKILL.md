@@ -176,7 +176,9 @@ by `auth.pendingRegistration` from the common base class.
 server-side secret through `config.ts`, `Dockerfile.client*`, and the relevant
 `docker-compose*.yml` build args — and add the matching server-side strategy (see
 `tapestry-server-worker`'s Auth section; the server has its own, independent provider
-map keyed by `authType`, not by this same `ProviderName`).
+map keyed by `authType`, not by this same `ProviderName`). See `tapestry-auth-providers`
+for the complete checklist, including the OAuth authorization-code pattern most new
+providers actually need.
 
 ## Build-time config (`client/src/config.ts`)
 
@@ -251,9 +253,9 @@ floating per-item toolbar) and its `change-thumbnail-button/` subfolder.
    into `core-client`'s defaults.
 2. **New item type = multi-layer change.** Missing the `core-client` components-config
    entry is a compile error (by design) — don't work around it by casting.
-3. **Adding a new auth provider is new work, not a config toggle** — check
-   `tapestry-server-worker` for the matching server-side strategy map you'd also
-   need to add.
+3. **Adding a new auth provider is new work, not a config toggle** — see
+   `tapestry-auth-providers` for the full client+server+schema checklist, and
+   `tapestry-server-worker` for the matching server-side strategy map.
 4. **Validate socket payloads with Zod on arrival** — don't trust the socket event's TS
    type alone, following `socket-manager.ts`'s existing pattern.
 5. See `tapestry-server-worker` for the matching backend conventions, and

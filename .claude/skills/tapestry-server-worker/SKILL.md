@@ -216,7 +216,7 @@ than inventing a second fan-out mechanism.
    clients live.
 4. **Only `refreshToken`, `gsi` (Google), `iaCookies`, `iaCredentials`, and
    `registerUser` are real auth strategies** — adding another is new work, not
-   a config toggle.
+   a config toggle. See `tapestry-auth-providers` for the full checklist.
 5. See `tapestry-client-features` for the matching client-side conventions (item types,
    auth provider registration, socket-manager) and `tapestry-local-dev-environment` /
    `tapestry-production-deployment` for how these services are actually run.

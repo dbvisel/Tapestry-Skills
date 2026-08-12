@@ -19,6 +19,7 @@ skill content, to start.
 | [`tapestry-production-deployment`](.claude/skills/tapestry-production-deployment/SKILL.md) | Updating a customized production VM deployment — fork/merge workflow, `docker-compose-fnf.yml` specifics, and the resource-contention outage to avoid repeating |
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
+| [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 
 ## Using these skills
 
@@ -52,3 +53,9 @@ during review, in case future editors hit the same trap:
   the archive.org customization branches, which is a separate axis of variation from
   the MinIO installer. Most people running any form of local dev, including
   `dbvisel/main`, never see a CSP `<meta>` tag at all.
+- Those "experimental auth providers on other branches" are exactly what
+  `tapestry-auth-providers` is built from (`orcid-login`, `mediawiki-login` — each a
+  single clean commit on top of `dbvisel/main`). They're real, complete reference
+  implementations of the pattern, but not implemented on any default branch — the skill
+  is explicit that ORCID/MediaWiki login don't exist today, only the pattern for adding
+  something like them does.
