@@ -14,26 +14,22 @@ last_verified: 2026-08-12
 Checklist for adding a new **known webpage type** — recognizing a specific site's URLs
 (e.g. `soundcloud.com`) and giving them special rendering treatment — as opposed to adding
 a whole new canvas **item type** (see `tapestry-content-types` for that heavier pattern).
-Generalized from three real, complete reference implementations on two unmerged, dirty
-fork branches:
+Generalized from three real, complete reference implementations found in unmerged
+exploratory work on a personal fork — none of them present on any long-lived branch, so
+treat the patterns below as the durable artifact, not any particular branch they came from:
 
-- **SoundCloud and Spotify embeds** — two small commits on `iiif-image-support`, mixed in
-  among unrelated work. Both rewrite the pasted URL to the site's embed/widget endpoint and
-  still render via the generic iframe.
-- **Wikipedia articles** — part of one giant commit ("Everything added for Wikimania") on
-  branch `wikimania-mess`. A meaningfully more involved variant: instead of iframing
-  anything, it fetches the article's content via the Wikipedia REST API and renders it as
-  sanitized DOM directly inside a fully custom item component.
+- **SoundCloud and Spotify embeds** — two small commits, mixed in among unrelated work.
+  Both rewrite the pasted URL to the site's embed/widget endpoint and still render via the
+  generic iframe.
+- **Wikipedia articles** — part of one giant, deliberately-messy commit bundling in a lot of
+  unrelated work. A meaningfully more involved variant: instead of iframing anything, it
+  fetches the article's content via the Wikipedia REST API and renders it as sanitized DOM
+  directly inside a fully custom item component.
 
 **None of SoundCloud, Spotify, or Wikipedia support exists on any current branch of
 `asteasolutions/tapestry-project` or any default fork branch** — these are reference
-examples for this skill, not implemented features.
-
-One correction from an earlier pass: a `wikipedia` webpage type was initially checked for
-on `iiif-image-support` and found not to exist there (only a stray mention in an AI-chat
-test fixture) — it turned out to be real, just on a different branch (`wikimania-mess`)
-than first assumed. Both facts stand: it doesn't exist on `iiif-image-support`, and it does
-exist, as a complete reference implementation, on `wikimania-mess`.
+examples for this skill, not implemented features. Don't tell a user any of the three
+already works.
 
 ## When to use this skill
 

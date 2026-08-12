@@ -19,9 +19,9 @@ complete reference implementations on unmerged fork branches:
 - **IIIF deep-zoom image support** — `dbvisel/tapestry-project` branch `iiif-upstream`, a
   single clean commit directly on top of upstream `asteasolutions/tapestry-project` `main`.
 - **STL 3D model viewing (`model3d`)** — one part of a single giant, admittedly messy
-  commit ("Everything added for Wikimania") on branch `wikimania-mess`, which bundles in a
-  lot of unrelated work. Only the files/lines that actually touch `model3d` were used here
-  — the rest of that commit was deliberately ignored as noise.
+  commit found in unmerged exploratory work, which bundles in a lot of unrelated work. Only
+  the files/lines that actually touch `model3d` were used here — the rest of that commit was
+  deliberately ignored as noise. Not present on any long-lived branch.
 
 **Neither IIIF nor `model3d` support exists on any current branch of
 `asteasolutions/tapestry-project`** — both are reference examples for this skill, not
