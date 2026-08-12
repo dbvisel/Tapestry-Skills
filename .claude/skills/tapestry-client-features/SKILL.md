@@ -92,7 +92,10 @@ insert it **before** the webpage catch-all.
 
 ## Adding a brand-new canvas item type
 
-This touches every layer — follow in order:
+This touches every layer. See `tapestry-content-types` for the complete, verified
+checklist (generalized from a real reference implementation, including the
+easy-to-miss export-version bump and the client-side item-factory/sizing steps this
+summary doesn't cover). Short version, client-side only:
 
 1. **`core/src/data-format/schemas/item.ts`** — add a `z.literal('yourType')`-tagged
    variant to the `Item`/`MediaItem` discriminated union (existing: `text`,

@@ -20,6 +20,7 @@ skill content, to start.
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
+| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from a real (unmerged) reference implementation: IIIF deep-zoom images |
 
 ## Using these skills
 
@@ -59,3 +60,7 @@ during review, in case future editors hit the same trap:
   implementations of the pattern, but not implemented on any default branch — the skill
   is explicit that ORCID/MediaWiki login don't exist today, only the pattern for adding
   something like them does.
+- Same story for `tapestry-content-types`, built from `iiif-upstream` (a single clean
+  commit, but this one directly on top of upstream `asteasolutions/main` rather than
+  `dbvisel/main`). IIIF image support doesn't exist on any default branch either — again,
+  a pattern to follow, not a feature to claim exists.
