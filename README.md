@@ -21,6 +21,7 @@ skill content, to start.
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from a real (unmerged) reference implementation: IIIF deep-zoom images |
+| [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs for special embed handling) without adding a whole new item type — a much lighter, mostly compile-time-enforced pattern, generalized from two real (unmerged) reference implementations: SoundCloud and Spotify embeds |
 
 ## Using these skills
 
@@ -64,3 +65,8 @@ during review, in case future editors hit the same trap:
   commit, but this one directly on top of upstream `asteasolutions/main` rather than
   `dbvisel/main`). IIIF image support doesn't exist on any default branch either — again,
   a pattern to follow, not a feature to claim exists.
+- `tapestry-webpage-types` is built from two small commits on `iiif-image-support`, a
+  branch explicitly flagged by its own author as dirty/not up to date. One expected example
+  (a `wikipedia` webpage type) turned out not to actually exist on that branch — verified by
+  a full-text search before writing anything — so the skill only uses the two that do:
+  SoundCloud and Spotify embeds. Neither exists on any default branch either.

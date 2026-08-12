@@ -28,6 +28,12 @@ work; use this as the template for adding a *new* type.
 - Any task that touches `MediaItemSchema`, `ItemType`, or the per-item-type maps this
   skill catalogs below
 
+**Before reaching for this skill**, check whether the content is really "a web page or
+embeddable widget at a URL" (e.g. a specific site like SoundCloud or Spotify) rather than
+something needing a genuinely different rendering surface. If so, `tapestry-webpage-types`
+is a much smaller, mostly compile-time-enforced pattern that reuses the existing `webpage`
+item type entirely — no new Prisma column, no new DTO, no export-version bump.
+
 ## Guiding principle: change as little as possible
 
 The reference implementation is a good model precisely because it's disciplined about
