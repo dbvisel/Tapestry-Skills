@@ -1,0 +1,37 @@
+FROM node:24-alpine AS builder
+
+ADD package.json package-lock.json /app/
+ADD core/package.json /app/core/
+ADD core-client/package.json /app/core-client/
+ADD shared/package.json /app/shared/
+ADD client/package.json /app/client/
+
+WORKDIR /app
+RUN npm ci
+
+ADD core/ /app/core
+ADD core-client/ /app/core-client
+ADD shared/ /app/shared
+ADD client/ /app/client
+
+# Client build-time configuration. These are supplied as build args by
+# docker-compose, which sources them from the .env file. They are declared
+# here (so Vite can read them during the build) but intentionally left without
+# default values, so no environment-specific config or secrets (e.g. the
+# Sentry DSN) are committed to the repository.
+ARG VITE_API_URL
+ARG VITE_AUTH_PROVIDER
+ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_BUG_REPORT_FORM_URL
+ARG VITE_AI_CHAT_EXPIRES_IN
+ARG VITE_WEBPAGE_LOADER_TIMEOUT
+ARG VITE_STUN_SERVER
+ARG VITE_SENTRY_DSN
+
+RUN cd /app/client && npm run build
+
+FROM nginx:1.27.3
+
+ADD ./deployment/nginx /etc/nginx
+
+COPY --from=builder /app/client/dist /usr/share/nginx/html
