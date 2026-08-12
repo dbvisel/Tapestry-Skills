@@ -231,4 +231,6 @@ before) and the second in steps 9-13.
    standalone `viewer` app), not a checklist item you're required to complete.
 8. See `tapestry-content-types` for the heavier pattern this one deliberately avoids, and
    `tapestry-server-worker` for the `resolveWebSource`/REST resource machinery this
-   plugs into for free.
+   plugs into for free. If the pasted URL just *describes* a file that should become an
+   ordinary `image`/`video`/... item — rather than something that should render as a
+   `webpage` item itself — see `tapestry-external-media-sources` instead.

@@ -22,6 +22,7 @@ skill content, to start.
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from three real (unmerged) reference implementations: SoundCloud, Spotify, and Wikipedia |
+| [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 
 ## Using these skills
 
@@ -80,3 +81,14 @@ during review, in case future editors hit the same trap:
   fully custom component — revealing a whole dispatch mechanism (a per-`webpageType`
   component override, optional and client-only) the skill didn't cover until this was
   folded in. None of the three exists on any default branch.
+- `tapestry-external-media-sources` is also built from `wikimania-mess` — Wikimedia Commons
+  single-file import (`AmmoniteFossil.JPG`, and separately a `.stl` 3D model, which maps to
+  `model3d` via the exact same mechanism with no special-casing) and Openverse single-image
+  import, both verified against the real example URLs given in conversation, not invented.
+  This is the lightest of the three "recognize a URL, do something with it" patterns — no
+  schema, DTO, or Prisma change at all, since the result is a completely ordinary item of an
+  existing type pointing at a resolved direct file URL. Deliberately scoped to single-item
+  import only; both reference implementations also support a bulk/collection variant (a
+  Commons category, an Openverse tag search) via a separate, pre-existing picker-dialog
+  mechanism, left out of this skill at the user's explicit direction — a candidate for a
+  future skill instead.

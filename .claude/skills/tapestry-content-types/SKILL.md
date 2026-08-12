@@ -263,3 +263,6 @@ lowercase-`type`/PascalCase-class convention exactly.
 8. See `tapestry-client-features` for the surrounding client architecture (stage/controller
    pattern, workspace boundaries) and `tapestry-server-worker` for the surrounding backend
    architecture (REST resource conventions, Prisma migrations) this checklist plugs into.
+   If the actual goal is "let users paste a URL from platform X and import the file it
+   describes" using an *existing* item type — not render something new — see
+   `tapestry-external-media-sources` instead; it needs none of this checklist.
