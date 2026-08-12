@@ -21,7 +21,7 @@ skill content, to start.
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
-| [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from three real (unmerged) reference implementations: SoundCloud, Spotify, and Wikipedia |
+| [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from three real (unmerged) reference implementations of that extension |
 
@@ -73,14 +73,19 @@ during review, in case future editors hit the same trap:
   gaps the first alone had left the skill overstating (e.g. that a bespoke item factory is
   always necessary — `model3d` shows the far more common case of reusing the existing
   generic file-matching factory instead).
-- `tapestry-webpage-types` is built from two small commits found in unmerged exploratory
-  work (dirty, not up to date) plus, later, a `wikipedia` webpage type found in a different,
-  separately-messy commit — not present on any long-lived branch either. Wikipedia's
-  implementation is a genuinely different strategy from SoundCloud/Spotify: instead of
-  iframing a rewritten embed URL, it fetches the article via the Wikipedia REST API and
-  renders sanitized DOM directly in a fully custom component — revealing a whole dispatch
-  mechanism (a per-`webpageType` component override, optional and client-only) the skill
-  didn't cover until this was folded in. None of the three exists on any default branch.
+- `tapestry-webpage-types` is built from small commits found in unmerged exploratory work
+  (dirty, not up to date), covering SoundCloud, Spotify, and — folded in later — Sketchfab,
+  plus a `wikipedia` webpage type found in a different, separately-messy commit. Sketchfab
+  confirmed the same embed-and-iframe strategy as SoundCloud/Spotify (it just blocks framing
+  via `X-Frame-Options` rather than CSP, and needed a trickier id-extraction technique from
+  a hyphenated slug) — worth noting since Sketchfab hosts 3D models but has nothing to do
+  with `tapestry-content-types`' `model3d` item type; it embeds Sketchfab's own hosted
+  viewer, not Tapestries' native one. Wikipedia, by contrast, is a genuinely different
+  strategy: instead of iframing a rewritten embed URL, it fetches the article via the
+  Wikipedia REST API and renders sanitized DOM directly in a fully custom component —
+  revealing a whole dispatch mechanism (a per-`webpageType` component override, optional and
+  client-only) the skill didn't cover until this was folded in. None of the four exists on
+  any default branch.
 - `tapestry-external-media-sources` and `tapestry-collection-imports` are both built from
   the same giant, deliberately-messy unmerged commit as `model3d` and Wikipedia above —
   Wikimedia Commons and Openverse single-file import for the former (verified against real

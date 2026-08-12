@@ -1,12 +1,12 @@
 ---
 name: tapestry-webpage-types
-description: Add a new known webpage type to asteasolutions/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed OR fully custom DOM-rendering treatment, without adding a whole new item type. Generalized from three real reference implementations (SoundCloud, Spotify, Wikipedia) on two unmerged, dirty fork branches
+description: Add a new known webpage type to asteasolutions/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed OR fully custom DOM-rendering treatment, without adding a whole new item type. Generalized from four real reference implementations (SoundCloud, Spotify, Sketchfab, Wikipedia) found in unmerged exploratory work
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["KNOWN_WEBPAGE_TYPES", "WebpageType", "WEB_SOURCE_PARSERS", "web source parser"]
-  - keywords: ["soundcloud embed", "spotify embed", "wikipedia article", "recognize URL", "special webpage handling"]
+  - keywords: ["soundcloud embed", "spotify embed", "sketchfab embed", "wikipedia article", "recognize URL", "special webpage handling"]
   - keywords: ["findWebSourceParser", "webpageItemFactory", "ALLOWED_ORIGINS", "DOMPurify", "dangerouslySetInnerHTML"]
 last_verified: 2026-08-12
 ---
@@ -14,22 +14,25 @@ last_verified: 2026-08-12
 Checklist for adding a new **known webpage type** — recognizing a specific site's URLs
 (e.g. `soundcloud.com`) and giving them special rendering treatment — as opposed to adding
 a whole new canvas **item type** (see `tapestry-content-types` for that heavier pattern).
-Generalized from three real, complete reference implementations found in unmerged
+Generalized from four real, complete reference implementations found in unmerged
 exploratory work on a personal fork — none of them present on any long-lived branch, so
 treat the patterns below as the durable artifact, not any particular branch they came from:
 
-- **SoundCloud and Spotify embeds** — two small commits, mixed in among unrelated work.
-  Both rewrite the pasted URL to the site's embed/widget endpoint and still render via the
-  generic iframe.
+- **SoundCloud, Spotify, and Sketchfab embeds** — small commits, mixed in among unrelated
+  work. All three rewrite the pasted URL to the site's embed/widget endpoint and still
+  render via the generic iframe.
 - **Wikipedia articles** — part of one giant, deliberately-messy commit bundling in a lot of
   unrelated work. A meaningfully more involved variant: instead of iframing anything, it
   fetches the article's content via the Wikipedia REST API and renders it as sanitized DOM
   directly inside a fully custom item component.
 
-**None of SoundCloud, Spotify, or Wikipedia support exists on any current branch of
-`asteasolutions/tapestry-project` or any default fork branch** — these are reference
-examples for this skill, not implemented features. Don't tell a user any of the three
-already works.
+**None of SoundCloud, Spotify, Sketchfab, or Wikipedia support exists on any current branch
+of `asteasolutions/tapestry-project` or any default fork branch** — these are reference
+examples for this skill, not implemented features. Don't tell a user any of the four
+already works. (Note: Sketchfab hosts 3D models, but this implementation embeds Sketchfab's
+*own* hosted viewer via iframe — it is not related to `tapestry-content-types`' `model3d`
+item type, which is Tapestries' own native STL viewer. Don't conflate the two just because
+both involve "3D.")
 
 ## When to use this skill
 
@@ -94,12 +97,20 @@ before) and the second in steps 9-13.
      return the canonical page URL unchanged — Wikipedia's does exactly this; the parser's
      job there is purely URL *recognition* and *canonicalization*, not rewriting to
      something iframeable.
-   - **Make `parse`/`construct` idempotent**: both reference parsers detect whether they've
-     already been given their own embed URL (vs. the original public URL) and normalize
+   - **Make `parse`/`construct` idempotent**: every reference parser detects whether it's
+     already been given its own embed URL (vs. the original public URL) and normalizes
      either input to the same output. This matters because the webpage viewer **re-runs
      `construct` at render time** from whatever `source` ended up stored — if `construct`
      assumed it always received a raw public URL, re-rendering a stored embed URL would
      double-rewrite it and break.
+   - **Handle more than one URL shape for the same resource, if the site has them.**
+     Sketchfab links to the same 3D model two different ways — a human-facing page at
+     `/3d-models/<slug>-<uid>` and a bare canonical form at `/models/<uid>` (optionally
+     already suffixed `/embed`) — and its parser's `matches`/`toEmbed` both need to
+     recognize either. Extracting the id itself can require more than a clean path segment
+     or query param, too: Sketchfab's `<uid>` is the *last hyphen-delimited segment* of the
+     slug-form path's final segment, not the whole segment — check the site's actual URL
+     structure rather than assuming a simple `pathname.split('/')` grab is enough.
 4. **`core/src/web-sources/index.ts`** — import the new parser class and add
    `<x>: new <X>SourceParser()` to `WEB_SOURCE_PARSERS`. **This step cannot be silently
    skipped**: `WEB_SOURCE_PARSERS` is declared `satisfies ParsersMap`, and `ParsersMap` is a
@@ -115,13 +126,15 @@ before) and the second in steps 9-13.
    possible": no new resource branch, no transformer change, no DTO field.
 6. **`client/src/stage/item-factories.ts`** — only needed if the site **can't just be
    iframed as a generic webpage** and needs its URL rewritten to a dedicated embed endpoint
-   *before* item creation (both SoundCloud and Spotify block framing of their regular pages
-   and only work via a separate widget/embed URL). If so:
-   - Use the existing `createWebSourceEmbedFactory(parser)` helper (introduced by the
-     Spotify commit specifically to avoid duplicating the SoundCloud factory's body — the
-     second reference implementation refactored the first's one-off factory into this
-     shared helper rather than copy-pasting it; do the same if you're adding a third) to
-     build a factory from `WEB_SOURCE_PARSERS.<x>`.
+   *before* item creation. Check for either of the two real mechanisms sites use to block
+   framing — they need the same fix (rewrite to an embed URL) but show up differently:
+   `X-Frame-Options: SAMEORIGIN` (Sketchfab's regular model pages) or a restrictive CSP
+   `frame-ancestors` directive (Spotify's). SoundCloud simply has no iframeable page at all
+   for a track and only ever exposes a widget endpoint. If the site has either problem:
+   - Use the existing `createWebSourceEmbedFactory(parser)` helper (introduced when a second
+     site needed the same shape as the first, specifically to avoid duplicating that first
+     factory's body — refactor a one-off factory into this shared helper the same way if
+     you're adding one after the first) to build a factory from `WEB_SOURCE_PARSERS.<x>`.
    - Insert it into the `ITEM_FACTORIES` array **before `htmlFileItemFactory`**. Why: a site
      that serves an exact `text/html` content type gets intercepted by `htmlFileItemFactory`
      into a broken generic webpage item before the parser-aware fallback
@@ -142,7 +155,9 @@ before) and the second in steps 9-13.
    iframe, not per-type. The Spotify reference commit broadened it from `"autoplay"` to
    `"autoplay; encrypted-media; clipboard-write; picture-in-picture"` for *all* webpage
    embeds, not just Spotify's, since there's nowhere to scope it more narrowly. Document why
-   each added permission is needed, the way that commit's comment does.
+   each added permission is needed, the way that commit's comment does. Not every new type
+   needs to touch this, though — Sketchfab's addition only needed the `ALLOWED_ORIGINS`
+   entry; the permission set Spotify had already broadened it to was sufficient.
 8. **Optional — `server/src/tasks/thumbnail-generators/{index.ts,webpage.ts}`** — the
    generic Puppeteer-screenshot thumbnail (`generateWebpageThumbnail`, the default fallback
    in `generatePrimaryThumbnail`) works for most new webpage types with zero changes — both
