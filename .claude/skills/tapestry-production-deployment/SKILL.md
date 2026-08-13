@@ -1,28 +1,24 @@
 ---
 name: tapestry-production-deployment
-description: Update a customized production VM deployment of asteasolutions/tapestry-project (fork-and-merge workflow, docker-compose-fnf.yml specifics, Vault approle, backups) without repeating the 2026-08-12 outage caused by building images against live traffic
+description: Update a customized production VM deployment of asteasolutions/tapestry-project (fork-and-merge workflow, docker-compose-fnf.yml specifics, Vault approle, backups)
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry-project deployment", "docker-compose-fnf.yml", "archive-version-updated", "VM update", "tapestries.archive.org"]
   - keywords: ["fork upstream merge", "prisma migrate deploy", "manage-tapestry-visibility.sh"]
-  - keywords: ["docker build live traffic", "resource contention", "vault approle seed"]
-last_verified: 2026-08-12
+last_verified: 2026-08-13
 ---
 
 Process for updating a **customized, forked** production deployment of `tapestry-project`
 (e.g. a VM running under a personal fork with local-only customizations layered on top of
-upstream `main`) — merging in upstream changes, rebuilding, and rolling out, without the
-resource-contention failure mode that has already caused one real outage.
+upstream `main`) — merging in upstream changes, rebuilding, and rolling out.
 
 ## When to use this skill
 
 - "Update the production VM to the latest upstream tapestry-project"
 - Merging upstream `main` into a customized deployment branch
 - Rebuilding/redeploying `docker-compose-fnf.yml` on a live server
-- Managing a live tapestry's visibility from the command line
-- Diagnosing why a VM went unreachable during/after a deploy
 
 ## Why this deployment is structured as a fork, not a vanilla checkout
 
@@ -37,9 +33,8 @@ resource-contention failure mode that has already caused one real outage.
   during a merge; they carry forward automatically.
 - `.env` is gitignored and lives only on the VM — never touched by any of this.
 
-The full step-by-step is in `references/updating-process.md` (verbatim copy of the
-in-repo `deployment/UPDATING.md`). What follows here is the load-bearing facts and the
-lesson from the one time this went wrong.
+The full step-by-step is in `references/updating-process.md`. What follows here is the
+load-bearing facts.
 
 ## One-time facts worth knowing
 
@@ -93,45 +88,12 @@ lesson from the one time this went wrong.
    DB backup if a migration actually corrupted data (additive migrations, the common
    case, won't).
 
-## Lesson from the 2026-08-12 outage — don't build against live traffic
-
-Running `docker compose -f docker-compose-fnf.yml build` on the VM **while the
-production containers were still live and serving traffic** caused the VM to become
-completely unreachable (SSH timeouts, site down) partway through the build. Suspected
-cause: resource contention — the build compiles native deps for Puppeteer/Chromium,
-ImageMagick, and ghostscript across `worker`/`server`/`client` images simultaneously,
-competing with the live containers for CPU/memory/disk.
-
-**Before rebuilding on a production VM with live traffic**:
-- Take backups first regardless (step 1 above) — they're cheap insurance and were the
-  reason the actual outage was a non-event data-wise.
-- Check `free -h`, `df -h`, and `docker system df` beforehand to know your headroom.
-- Prefer building during a low-traffic window, or building on a separate machine and
-  shipping images, if the VM's resources are tight — a heavy multi-service build
-  competing with live containers is the specific failure mode that caused the outage,
-  not building in general.
-- If a build-triggered outage happens anyway: check `dmesg -T | grep -i "killed process\|out of memory"`
-  to confirm OOM as the cause before assuming something else broke.
-
-## Operational tool: `manage-tapestry-visibility.sh`
-
-VM-only script (not upstream), run from the repo directory on the server. Lists
-tapestries (optionally filtered by title/slug/owner email) and interactively changes
-one's `visibility` (`private`/`link`/`public` — `public` makes it appear in the
-"Samples" list every client sees on startup). Runs against the `db` service via
-`docker compose exec`, defaults to `docker-compose-fnf.yml`/`.env`/`db`/`tapestries`/
-`tapestries`, all overridable via env vars. Requires explicitly typing `yes` to confirm
-before applying — safe to run without fear of an accidental one-key change.
-
-```bash
-./manage-tapestry-visibility.sh            # list everything, then pick one
-./manage-tapestry-visibility.sh <search>   # filter by title / slug / owner email
-```
-
 ## Guardrails
 
-1. **Never rebuild against live traffic without checking resource headroom first** —
-   see the outage lesson above.
+1. **Check resource headroom (`free -h`, `df -h`, `docker system df`) before a heavy
+   multi-image rebuild on a box serving live traffic** — general hygiene, since the
+   build compiles native deps for Puppeteer/Chromium, ImageMagick, and ghostscript
+   across `worker`/`server`/`client` simultaneously.
 2. **Never rename the checkout directory or override the Compose project name** without
    a deliberate volume migration.
 3. **Treat every incoming Prisma migration as a live-data hazard** before restarting
@@ -140,5 +102,7 @@ before applying — safe to run without fear of an accidental one-key change.
    commit it, and confirm it's still present after any branch switch.
 5. **Merge upstream in a separate clone with push access**, never directly on the VM.
 6. See `tapestry-local-dev-environment` for the MinIO/Vault self-init mechanics shared
-   between local dev and this deployment, and `tapestry-server-worker` for what
-   actually runs inside `server`/`worker`.
+   between local dev and this deployment, `tapestry-server-worker` for what
+   actually runs inside `server`/`worker`, `tapestry-backups` for backing up this
+   VM's Postgres/MinIO data, and `tapestry-visibility` for changing a live
+   tapestry's visibility (`manage-tapestry-visibility.sh`).
