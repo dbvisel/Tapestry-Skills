@@ -80,31 +80,49 @@ rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 cp -R "$DIST_DIR/." "$OUTPUT_DIR/"
 
-# Rename the built entry point out of the way of our own index.html. Safe because
-# --base=./ made every asset reference in it relative to the containing directory,
-# not to the filename "index.html" itself — confirmed by inspecting a real build.
-mv "$OUTPUT_DIR/index.html" "$OUTPUT_DIR/viewer.html"
-
 cp "$ZIP_PATH" "$OUTPUT_DIR/tapestry.zip"
 
-# A thin redirect shim — NOT a modification of viewer/ source (see
-# tapestry-viewer-embedding guardrail #1) — so opening the directory's root just
-# works, without anyone needing to know about ?source=.
-cat > "$OUTPUT_DIR/index.html" <<'HTML'
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=viewer.html?source=tapestry.zip" />
-  <title>Tapestry</title>
-  <script>location.replace('viewer.html?source=tapestry.zip')</script>
-</head>
-<body>
-  <p>Loading tapestry&hellip; if nothing happens,
-    <a href="viewer.html?source=tapestry.zip">click here</a>.</p>
-</body>
-</html>
-HTML
+# The built viewer app uses <BrowserRouter><Routes><Route path="/" .../></Routes></...>
+# (viewer/src/main.tsx) — it ONLY matches the exact pathname "/". So the entry point
+# must stay named index.html, served at the site's root — renaming it (e.g. to
+# viewer.html) or redirecting to a different path breaks React Router with "No routes
+# matched location" (confirmed against a real deploy). The query param the app reads
+# (?source=...) has to reach it WITHOUT changing the pathname, so instead of a redirect
+# we inject a tiny bootstrap script into the built index.html's <head> — this edits the
+# BUILD OUTPUT as a packaging step, not viewer/'s source — that calls
+# history.replaceState to add ?source=tapestry.zip to the current URL before the app's
+# module script (which React Router reads on mount) ever runs. No navigation, no
+# redirect, no extra page — the same index.html, at "/", just already has the query
+# param by the time React mounts.
+python3 - "$OUTPUT_DIR/index.html" <<'PYEOF'
+import re
+import sys
+
+path = sys.argv[1]
+html = open(path, encoding="utf-8").read()
+
+bootstrap = (
+    "<script>"
+    "(function(){"
+    "if(!/(?:^|[?&])source=/.test(location.search)){"
+    "var sep=location.search?'&':'?';"
+    "history.replaceState(null,'',location.pathname+location.search+sep+'source=tapestry.zip');"
+    "}"
+    "})();"
+    "</script>\n"
+)
+
+# Insert immediately before the built module <script> tag, so this plain (non-module,
+# non-deferred) script runs first during HTML parsing.
+new_html, count = re.subn(
+    r'(<script type="module")', bootstrap + r"\1", html, count=1
+)
+if count != 1:
+    print(f"error: could not find the module <script> tag in {path}", file=sys.stderr)
+    sys.exit(1)
+
+open(path, "w", encoding="utf-8").write(new_html)
+PYEOF
 
 echo
 echo "Packaged standalone viewer app at: $OUTPUT_DIR"

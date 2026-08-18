@@ -1,6 +1,6 @@
 ---
 name: tapestry-standalone-viewer
-description: Package the standalone /viewer app together with ONE specific tapestry .zip into a single self-contained static directory — no server-side templating, no CORS setup, no ?source= param the end user has to know about. A specialization of tapestry-viewer-embedding's recipe (which packages the viewer generically, for any zip a host points it at) for the "one app, one fixed tapestry" case — the same shape as e.g. a WordPress plugin bundle, but as a plain static folder any http(s) host can serve. Includes a bundled script, verified end-to-end against a real viewer build and a real sample zip
+description: Package the standalone /viewer app together with ONE specific tapestry .zip into a single self-contained static directory — no server-side templating, no CORS setup, no ?source= param the end user has to know about. A specialization of tapestry-viewer-embedding's recipe (which packages the viewer generically, for any zip a host points it at) for the "one app, one fixed tapestry" case — the same shape as e.g. a WordPress plugin bundle, but as a plain static folder any http(s) host can serve. Includes a bundled script; verified against a real deploy failure (a naive redirect-to-a-renamed-file approach breaks the viewer's client-side router) and fixed with an approach confirmed in a real headless browser, not just curl
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-viewer-embedding"]
@@ -26,12 +26,18 @@ file was dropped on it). This skill covers the narrower, simpler case where the 
 known **at packaging time** and baked into the output — one app, one fixed tapestry,
 nothing chosen at runtime.
 
-**Verified end-to-end, not just assembled from the general recipe**: this skill's
-script was actually run against a real viewer build (`vite build --base=./` against
-`asteasolutions/tapestry-project`'s real `viewer/` workspace) and a real sample tapestry
-zip, and the resulting directory was served with a real static HTTP server and checked
-with `curl` — the redirect page, the renamed entry point, every asset path, and the
-bundled zip all resolved with `200` over a real origin.
+**Verified end-to-end against a real headless browser, not just curl.** An earlier
+version of this skill renamed the built entry point to `viewer.html` and redirected
+there — that passed a `curl`-and-static-server check (every path returned `200`) but
+**failed in an actual browser** when a real user deployed it to Netlify: the viewer's
+`<BrowserRouter>` (`viewer/src/main.tsx`) registers exactly one route,
+`<Route path="/">`, and matches nothing else — navigating to `/viewer.html` hit "No
+routes matched location" and rendered blank. `curl` can't catch this class of bug at
+all (it doesn't execute JS or a router); only a real browser run reveals it. The current
+approach (below) was verified by actually driving headless Chrome against a served
+build: no console errors, the real tapestry content rendered, and the final URL stayed
+at the site root with the query string appended (`.../?source=tapestry.zip`), not a
+separate path.
 
 ## When to use this skill
 
@@ -53,39 +59,55 @@ scripts/package-standalone-viewer.sh --zip tapestry.zip --output out-dir --proje
 
 This builds the viewer (`vite build --base=./`, skipping the monorepo-wide `tsc -b`
 check — same reasoning as `tapestry-viewer-embedding`), copies its output into
-`out-dir`, renames the built `index.html` to `viewer.html`, copies your `.zip` in as
-`tapestry.zip`, and writes a **new** `index.html` at the root that's a thin redirect to
-`viewer.html?source=tapestry.zip`. Already have a built `viewer/dist`? Pass `--dist
-path/to/viewer/dist` instead of `--project-dir` to skip the rebuild. Add `--serve
-[port]` to immediately serve the result locally with `python3 -m http.server` (matches
-`tapestry-viewer-embedding`'s macOS reference integration's own approach to getting a
-real http(s) origin) so you can check it right away.
+`out-dir` **unchanged** (same `index.html`, same filename, at the root), copies your
+`.zip` in as `tapestry.zip`, and injects a small bootstrap script into that
+`index.html`'s `<head>` — see below for exactly what it does and why. Already have a
+built `viewer/dist`? Pass `--dist path/to/viewer/dist` instead of `--project-dir` to
+skip the rebuild. Add `--serve [port]` to immediately serve the result locally with
+`python3 -m http.server` (matches `tapestry-viewer-embedding`'s macOS reference
+integration's own approach to getting a real http(s) origin) so you can check it right
+away.
 
 If the input zip needs to be built or validated first, see `tapestry-zip-authoring` /
 `tapestry-zip-analysis` — this skill only handles the packaging step, not producing or
 checking the zip's contents.
 
-## How the redirect works, and why it's not a viewer-source change
+## Why there's no redirect, and no renamed entry point
 
-`tapestry-viewer-embedding` guardrail #1 is "don't modify `viewer/` source for a new
-embedding target" — this skill doesn't. The built `viewer.html` (the renamed, untouched
-build output of `viewer/index.html`) is never edited. Instead, a **new, separate**
-`index.html` is written alongside it:
+The viewer's app reads which zip to load from a `?source=` query param
+(`useSearchParams()` in `viewer/src/app.tsx`) — but its `<BrowserRouter>` only ever
+registers `<Route path="/">` (`viewer/src/main.tsx`), matching that exact pathname and
+nothing else. **Any approach that serves the tapestry from a different path — a
+renamed file, a redirect to one — breaks the router outright** ("No routes matched
+location", confirmed against a real deploy). So the query param has to land on the
+*same* path (`/`, i.e. the untouched, unrenamed `index.html`) without ever navigating
+elsewhere.
+
+The fix: inject one small, plain (non-module) inline script into the built
+`index.html`'s `<head>`, immediately before the built module `<script>` tag:
 
 ```html
-<meta http-equiv="refresh" content="0; url=viewer.html?source=tapestry.zip" />
-<script>location.replace('viewer.html?source=tapestry.zip')</script>
+<script>(function(){
+  if(!/(?:^|[?&])source=/.test(location.search)){
+    var sep = location.search ? '&' : '?';
+    history.replaceState(null, '', location.pathname + location.search + sep + 'source=tapestry.zip');
+  }
+})();</script>
 ```
 
-Both the `<meta refresh>` and the inline script do the same redirect — the `<meta>` tag
-covers the (rare) case of JS being disabled; the script fires immediately without
-waiting for the refresh delay everywhere else. This is why the entry point had to move:
-if the written-out `index.html` and the viewer's own built `index.html` were the same
-file, there'd be nothing to redirect *to*. Renaming the build output to `viewer.html` is
-safe because `--base=./` (see `tapestry-viewer-embedding`) made every asset reference
-inside it relative to the containing *directory*, not to its own filename — confirmed
-directly: a real build's `favicon.png` link and `<script src>`/`<link href>` all came
-out as `./favicon.png`, `./assets/...` regardless of what the HTML file itself is named.
+`history.replaceState` rewrites the current URL's query string **without navigating** —
+no page load, no history entry, no visible redirect. Because this plain script isn't
+`type="module"` (module scripts are deferred until HTML parsing finishes), it runs
+*before* the module script that boots React and mounts `<BrowserRouter>`. By the time
+`useSearchParams()` first reads `location.search`, the `source` param is already there
+— the router never sees any path but `/`, and the URL bar ends up at
+`https://your-host/?source=tapestry.zip`, not a separate page.
+
+This edits the *build output* (`dist/index.html`) as a packaging step — not
+`viewer/`'s TypeScript/React source, which is what `tapestry-viewer-embedding`
+guardrail #1 actually means to rule out. Regenerate via the script (or a fresh
+`vite build --base=./` plus re-running the injection) if the viewer itself changes;
+don't hand-maintain a divergent copy of this one-line patch.
 
 ## Why no CORS setup is ever needed here
 
@@ -105,16 +127,19 @@ general recipe.
    step; the underlying constraints (never `file://`, `--base=./`, don't touch viewer
    source, offline-capability limits for URL-backed content) all still apply and aren't
    re-explained here.
-2. **The new `index.html` is a thin redirect, not a modification of the built viewer** —
-   don't hand-edit the *built* `viewer.html`/`assets/` output; regenerate it via the
-   script (or a fresh `vite build --base=./`) if the viewer itself needs to change.
+2. **Never rename the entry point or redirect to a different path** — the viewer's
+   router matches `/` only; any other path fails with "No routes matched location".
+   Keep `index.html`'s filename and location exactly as built.
 3. **Still never serve the result over `file://`** — the built viewer uses ES module
-   `<script>` tags, blocked under that scheme regardless of how simple the redirect
-   trick looks. Static-http-serve it, always.
-4. **One zip per package** — this skill is deliberately for the fixed-single-tapestry
+   `<script>` tags, blocked under that scheme regardless of how the query param gets
+   attached. Static-http-serve it, always.
+4. **Validate a fix like this against a real browser, not just `curl`/a static-file
+   check** — a client-side routing bug produces `200`s for every file and still fails
+   completely once real JS executes. `curl` genuinely cannot catch that class of bug.
+5. **One zip per package** — this skill is deliberately for the fixed-single-tapestry
    case. If the actual need is "let the host choose which zip at runtime," that's
    `tapestry-viewer-embedding`'s `?source=` contract directly, not this.
-5. **A zip that opens correctly here is not proof it would survive a real server-side
+6. **A zip that opens correctly here is not proof it would survive a real server-side
    import** — the viewer's own zip-reading is slightly more lenient (see
    `tapestry-zip-authoring`'s note on this). Validate a hand-built zip with
    `tapestry-zip-analysis` if it also needs to work as a real import, not just display
@@ -124,4 +149,4 @@ general recipe.
 
 | File | Purpose |
 |---|---|
-| `scripts/package-standalone-viewer.sh` | Builds (or reuses) the viewer, copies its output plus one tapestry `.zip` into a fresh directory, renames the entry point, and writes a redirect `index.html` so the whole thing opens with no `?source=` param needed. Optional `--serve` to check it immediately with a local static server. |
+| `scripts/package-standalone-viewer.sh` | Builds (or reuses) the viewer, copies its output plus one tapestry `.zip` into a fresh directory unchanged, and injects a `history.replaceState` bootstrap script into `index.html` so `?source=tapestry.zip` is present before the app mounts — same path, no redirect. Optional `--serve` to check it immediately with a local static server. |
