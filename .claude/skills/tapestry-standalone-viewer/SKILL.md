@@ -13,9 +13,11 @@ last_verified: 2026-08-18
 
 Build a single static directory that bundles the standalone `/viewer` app **with one
 specific tapestry `.zip` already attached** — open the directory's `index.html` (served
-over any http(s) origin) and that exact tapestry loads, with no query param, no server,
-and no CORS configuration to get right. Use this skill's bundled
-`scripts/package-standalone-viewer.sh` rather than assembling this by hand.
+over any http(s) origin) and that exact tapestry loads, with no server and no CORS
+configuration to get right (a visible `?source=` query param by default; optionally
+hidden entirely with `--no-query-string`, at a real trade-off — see below). Use this
+skill's bundled `scripts/package-standalone-viewer.sh` rather than assembling this by
+hand.
 
 **This is a specialization of `tapestry-viewer-embedding`, not a competing approach** —
 read that skill first. It documents the general recipe (build with `--base=./`, never
@@ -37,7 +39,9 @@ all (it doesn't execute JS or a router); only a real browser run reveals it. The
 approach (below) was verified by actually driving headless Chrome against a served
 build: no console errors, the real tapestry content rendered, and the final URL stayed
 at the site root with the query string appended (`.../?source=tapestry.zip`), not a
-separate path.
+separate path. The `--no-query-string` alternative (see below) was verified the same
+way — confirmed the URL stays at a completely bare root on first load, and that a
+reload skips re-fetching the zip entirely (reads from IndexedDB instead).
 
 ## When to use this skill
 
@@ -45,8 +49,10 @@ separate path.
   static site"
 - "Bundle the viewer with this specific .zip so it just opens" (as opposed to: "let my
   CMS/app choose which zip to show at runtime" — that's `tapestry-viewer-embedding`)
-- Distributing one tapestry to someone who just needs to double-click/upload/host a
-  folder, without touching a `?source=` URL param or a database
+- Distributing one tapestry to someone who just needs to upload/host a folder — no URL
+  param to configure, no database
+- "I don't want the `?source=` param visible in the URL at all" — `--no-query-string`,
+  with a real trade-off (see below) worth reading before defaulting to it
 - Same underlying mechanism as packaging a WordPress plugin around the viewer (see
   `tapestry-viewer-embedding`), but the output here is a plain static folder — no CMS,
   no plugin API, just files any http(s) host can serve
@@ -79,12 +85,15 @@ The viewer's app reads which zip to load from a `?source=` query param
 registers `<Route path="/">` (`viewer/src/main.tsx`), matching that exact pathname and
 nothing else. **Any approach that serves the tapestry from a different path — a
 renamed file, a redirect to one — breaks the router outright** ("No routes matched
-location", confirmed against a real deploy). So the query param has to land on the
-*same* path (`/`, i.e. the untouched, unrenamed `index.html`) without ever navigating
-elsewhere.
+location", confirmed against a real deploy). So getting the tapestry loaded has to
+happen *without ever navigating away from `/`* (i.e. the untouched, unrenamed
+`index.html`). Both of the script's two modes below do this; they differ only in
+**where the zip reference comes from and whether it shows up in the URL.**
 
-The fix: inject one small, plain (non-module) inline script into the built
-`index.html`'s `<head>`, immediately before the built module `<script>` tag:
+### Default mode: visible `?source=` (the app's documented contract)
+
+Inject one small, plain (non-module) inline script into the built `index.html`'s
+`<head>`, immediately before the built module `<script>` tag:
 
 ```html
 <script>(function(){
@@ -101,13 +110,40 @@ no page load, no history entry, no visible redirect. Because this plain script i
 *before* the module script that boots React and mounts `<BrowserRouter>`. By the time
 `useSearchParams()` first reads `location.search`, the `source` param is already there
 — the router never sees any path but `/`, and the URL bar ends up at
-`https://your-host/?source=tapestry.zip`, not a separate page.
+`https://your-host/?source=tapestry.zip`, not a separate page. This uses the app's own
+**documented** loading contract (the same `?source=` mechanism `tapestry-viewer-embedding`
+covers for the general case) — the most future-proof option, at the cost of a visible
+query string.
 
-This edits the *build output* (`dist/index.html`) as a packaging step — not
+### `--no-query-string`: hides it, at the cost of depending on an undocumented mechanism
+
+If even the visible `?source=tapestry.zip` isn't acceptable, `--no-query-string` hides
+it completely — verified working in a real browser (see below) — by using the app's
+*other* fallback path instead: with no `source` param, `app.tsx` falls back to reading
+a previously-imported file from IndexedDB (`viewer/src/services/db-service.ts`: database
+`tapestry` v1, object store `last_tapestry`, autoincrement key, storing a raw
+`ArrayBuffer`) — the mechanism that normally lets a returning visitor's last
+drag-and-dropped import survive a page reload. This mode pre-seeds that exact store with
+the bundled zip's bytes, **before** dynamically injecting the real module script (the
+static module `<script>` tag is removed from the HTML entirely and only added back,
+pointing at the same built filename, once seeding finishes) — avoiding a race against
+the app's own startup read of that store. A `count()` check skips the fetch-and-reseed
+work on repeat visits once it's already there, so this isn't a "refetch the zip on every
+load" cost.
+
+**The trade-off**: this depends on an *undocumented* internal storage schema
+(`db-service.ts`'s exact db/store names and shape) rather than the app's public
+`?source=` URL contract, so it's more fragile against a future viewer change — if that
+schema is ever renamed or restructured, this mode silently stops working (falls through
+to the app's own empty-state import UI, per the `try/catch`) while the default mode
+would keep working unaffected. Default to the visible-query-string mode; reach for
+`--no-query-string` only when a literally bare URL is a real requirement.
+
+Both modes edit the *build output* (`dist/index.html`) as a packaging step — not
 `viewer/`'s TypeScript/React source, which is what `tapestry-viewer-embedding`
 guardrail #1 actually means to rule out. Regenerate via the script (or a fresh
 `vite build --base=./` plus re-running the injection) if the viewer itself changes;
-don't hand-maintain a divergent copy of this one-line patch.
+don't hand-maintain a divergent copy of either patch.
 
 ## Why no CORS setup is ever needed here
 
@@ -144,9 +180,23 @@ general recipe.
    `tapestry-zip-authoring`'s note on this). Validate a hand-built zip with
    `tapestry-zip-analysis` if it also needs to work as a real import, not just display
    in the viewer.
+7. **Default to the visible-`?source=` mode; treat `--no-query-string` as an opt-in
+   trade.** It depends on `db-service.ts`'s undocumented internal storage schema rather
+   than the app's public URL contract, so it's the more fragile of the two against
+   future viewer changes. Reach for it only when a literally bare URL is a genuine
+   requirement, not by default.
+8. **Don't try to avoid shipping the `.zip` by pre-unzipping it.** The viewer's real
+   loader (`ImportService.parse`, `viewer/src/services/import-service.ts`) is built
+   entirely around parsing a zip blob and resolving `file:/...` references to entries
+   *inside that same zip* — there's no supported "loose files + a manifest" path. Doing
+   this would mean hand-reimplementing `parseRootJson` and the `file:/` resolution logic
+   outside the app's real, tested code — exactly the kind of unverified custom logic
+   that caused the routing bug above. It also isn't obviously more efficient: the zip is
+   fetched lazily via one real, cacheable HTTP request and is already
+   deflate-compressed.
 
 ## Bundled scripts
 
 | File | Purpose |
 |---|---|
-| `scripts/package-standalone-viewer.sh` | Builds (or reuses) the viewer, copies its output plus one tapestry `.zip` into a fresh directory unchanged, and injects a `history.replaceState` bootstrap script into `index.html` so `?source=tapestry.zip` is present before the app mounts — same path, no redirect. Optional `--serve` to check it immediately with a local static server. |
+| `scripts/package-standalone-viewer.sh` | Builds (or reuses) the viewer, copies its output plus one tapestry `.zip` into a fresh directory unchanged, and injects a bootstrap script into `index.html` so the app finds the zip before it mounts — same path, no redirect. Default mode sets `?source=tapestry.zip` via `history.replaceState` (visible, documented contract); `--no-query-string` instead pre-seeds the viewer's IndexedDB "last import" store (hidden, undocumented mechanism — see the trade-off above). Optional `--serve` to check it immediately with a local static server. |
