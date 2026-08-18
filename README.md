@@ -29,7 +29,7 @@ skill content, to start.
 | [`tapestry-backups`](.claude/skills/tapestry-backups/SKILL.md) | Backing up a Tapestry installation's Postgres database and MinIO object storage via the bundled `backup-tapestry.sh` script (interactive or scheduled), plus how to restore |
 | [`tapestry-zip-authoring`](.claude/skills/tapestry-zip-authoring/SKILL.md) | Constructing a valid tapestry export/import `.zip` from scratch — the full `root.json` schema and file-naming convention, plus a bundled, dependency-free builder script. **Does not require a `tapestry-project` checkout** — verified directly against the real app's schema/import behavior rather than derived from reading its source |
 | [`tapestry-zip-analysis`](.claude/skills/tapestry-zip-analysis/SKILL.md) | Analyzing an existing tapestry `.zip` — version, item inventory, groups/rels/presentation structure, and whether it's actually importable — via a bundled, dependency-free analyzer script. **Does not require a `tapestry-project` checkout**; depends on `tapestry-zip-authoring` for the schema reference, not on the app's source |
-| [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no `?source=` param, no CORS setup, since the zip ships same-origin with the viewer |
+| [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
 
 ## Using these skills
 
@@ -118,3 +118,17 @@ during review, in case future editors hit the same trap:
   folder, serve over a real http(s) origin since ES modules can't load under `file://`,
   point at the unmodified `?source=<url>` param). Neither integration exists on any default
   branch; the recipe they demonstrate is the durable artifact.
+- `tapestry-standalone-viewer`'s first version shipped a real bug that a curl-and-static-file
+  check didn't catch: it renamed the built viewer's `index.html` to `viewer.html` and
+  redirected there, which passed every `200`-status check but broke in an actual browser —
+  the viewer's `<BrowserRouter>` only registers `<Route path="/">`, so navigating to
+  `/viewer.html` hit "No routes matched location" and rendered blank. Found only once a real
+  user deployed the output to Netlify. Fixed by never renaming/redirecting at all: a small
+  bootstrap script injected into the untouched `index.html` sets the loading state (either the
+  app's own `?source=` URL param via `history.replaceState`, or — optionally, via
+  `--no-query-string` — its IndexedDB "last import" fallback store) before the app mounts, and
+  the fix was verified against a real headless-Chrome run instead of just `curl`. The skill's
+  "Performance at scale" section is similarly measured, not assumed: a real 430 MB/236-item
+  tapestry rendered in ~5s over loopback, showing the actual bottleneck for large tapestries is
+  the viewer's lack of streaming/range-request support on download, not the zip format or
+  client-side decompression.
