@@ -1,6 +1,6 @@
 ---
 name: tapestry-collection-imports
-description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, generalized from three real reference implementations on an unmerged fork branch
+description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, generalized from reference implementations plus one real (non-fork) implementation against actual upstream — IA search, via an open PR
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-external-media-sources"]
@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["import picker", "HandleIAImportDialog", "IAImport", "collection import", "bulk import"]
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
   - keywords: ["import-items-list", "LazyList", "MAX_SELECTION"]
-last_verified: 2026-08-12
+last_verified: 2026-08-18
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -23,19 +23,26 @@ anywhere; it only drives the picker.
 `IAImport`, and the whole `import-items-list/` component tree already exist on
 `asteasolutions/tapestry-project` `main` with real commit history (code review, bug fixes),
 originally built for Internet Archive collections and playlists. **This skill is about
-extending that mechanism with a new collection type**, generalized from three real,
-complete reference implementations of exactly that extension, found in unmerged
-exploratory work on a personal fork — not present on any long-lived branch:
+extending that mechanism with a new collection type**, generalized from three example
+extensions of exactly this kind:
 
 - **Wikimedia Commons categories** — `https://commons.wikimedia.org/wiki/Category:Fossil_forgeries`
-- **Openverse tag collections** — `https://openverse.org/image/collection?tag=Aztec`
+  — still only a reference implementation, found in unmerged exploratory work on a personal
+  fork, not present on any long-lived branch.
+- **Openverse tag collections** — `https://openverse.org/image/collection?tag=Aztec` — same
+  status as Commons: fork-only reference, not upstream.
 - **Internet Archive search queries** — `https://archive.org/search?query=subject%3A%22Gondavalekar%22`
+  — **this one is no longer just a reference implementation.** As of 2026-08-18 it's been
+  built as a real `IASearchCollection` addition against actual upstream and opened as a PR;
+  check whether it has since merged before treating it as still-missing. It's the source of
+  the gotchas below, since it was the first case where the *new* collection type had no
+  single representative IA item (a category/playlist resolves to one IA item's metadata
+  first; a raw search query never does).
 
-**None of these three collection types exists on any current branch of
-`asteasolutions/tapestry-project` or any default fork branch** — only `IACollection`
-(a literal IA collection/identifier) and `IAPlaylist` exist upstream today. Don't tell a
-user Commons/Openverse/IA-search bulk import already works; use this as the template for
-adding a *new* collection type.
+**So as of 2026-08-18, only `IACollection` (a literal IA collection/identifier),
+`IAPlaylist`, and (pending merge) `IASearchCollection` exist upstream** — Commons categories
+and Openverse tag collections don't yet. Don't tell a user Commons/Openverse bulk import
+already works; use this skill as the template for adding those.
 
 This skill pairs with `tapestry-external-media-sources`, which covers the single-item case
 for the same platforms (one Commons file, one Openverse image). A collection type's picker
@@ -64,6 +71,10 @@ the picker UI.
      lightweight `categoryinfo` endpoint (no thumbnails, no per-file lookups) specifically so
      the item factory (next step) can show "N files" and decide whether to open the picker
      at all, without paying for the expensive full listing until the user actually opens it.
+     **If the platform's search backend already reports a total on every query** (IA's
+     Solr-backed `advancedsearch.php` sets `response.numFound` regardless of `rows`), the
+     "cheap" probe doesn't need its own endpoint — `fetchIASearchCount` is just the normal
+     search call with `pageSize: 1`.
    - **A full member-listing fetch**, used once the picker is actually open:
      `fetch<X>CollectionMembers(id)`, returning enough per-item data for the list UI (an id,
      a thumbnail if cheaply available, whatever metadata the confirm step needs). **Cache
@@ -72,6 +83,14 @@ the picker UI.
      confirm step's resolution all share one fetch rather than tripling the request count for
      what the user experiences as a single action. Evict a failed fetch from the cache so a
      transient error doesn't permanently poison it for the session.
+     **This doesn't have to live in `core/` at all** — it only needs to if `core/` doesn't
+     already expose a generic query primitive for the platform. IA's real
+     `IASearchCollection` implementation added no `fetchIASearchMembers` to
+     `core/src/internet-archive.ts`; the paginated, windowed fetch (`requestSearchItems`)
+     lives directly in step 6's list component, built on the existing `iaAdvancedSearch`
+     primitive, and step 4's "select all" branch imports and reuses that same function. Only
+     add a core member-listing export if the platform has no such reusable primitive yet
+     (true for a first-time Commons/Openverse integration).
 2. **`client/src/pages/tapestry/view-model/index.ts`** — add a member to the `IAImport`
    discriminated union: `{ type: '<X>Collection', <idField>: string, total: number }`. The
    `total` (from step 1's count fetch) is shown immediately in the dialog header before the
@@ -121,8 +140,15 @@ the picker UI.
    - The component itself: wrap `<LazyList windowSize={...} requestItems={...} renderItem={...} />`,
      render each item as a `<Checkbox>` (thumbnail + label if available), disable it once
      `selectedItems.length >= MAX_SELECTION`, and include a `<SelectAll>` control wired to
-     the dialog's `onToggleAll` prop. Copy an existing sibling (`commons-category-list/`) as
-     the starting point — the shape is intentionally near-identical across all of them.
+     the dialog's `onToggleAll` prop. Copy an existing sibling as the starting point — the
+     shape is intentionally near-identical across all of them. Real, already-upstream
+     siblings exist for this now: `collection-list/` (`IACollection`) and, pending merge,
+     `search-list/` (`IASearchCollection`); fork-only reference work also has
+     `commons-category-list/`. If the new type's rendered fields genuinely match a sibling's
+     (both draw from the same underlying search API, say), importing that sibling's
+     `styles.module.css` directly — rather than duplicating it into the new component's own
+     folder — keeps the diff smaller for identical visuals; `search-list/` did this against
+     `collection-list/styles.module.css` rather than copying it.
 7. **`client/src/components/handle-ia-import-dialog/import-details/index.tsx`** — add a
    branch showing the collection's name/id, its `total` count, and a "View on \<platform\>"
    link back to the original collection page. Also a plain `if` chain.
@@ -146,6 +172,24 @@ the picker UI.
   the list dispatcher's branch). Adding an `IAImport` member and only updating the two
   `Record` maps compiles cleanly but silently does nothing when a user tries to actually use
   it — verify all four by hand.
+- **A collection type with no single representative item breaks more than the four
+  checklist integration points — it can break existing shared code's field assumptions.**
+  `createNewItems` in `handle-ia-import-dialog/index.tsx` destructured
+  `{ id, metadata: { mediatype } }` straight out of its `IAImport` parameter, and
+  `import-details/index.tsx`'s props did the same — both safe when every existing member
+  (`IACollection`, `IAPlaylist`) resolved one IA item's metadata before the picker ever
+  opened. A raw search query has no such item, so `IASearchCollection` carries no `id`/
+  `metadata` — **and `tsc` catches this immediately**: destructuring a field off a
+  discriminated union errors at every existing call site that isn't already `id`/`metadata`
+  on *all* members, the moment the new member is added to the union (verified: reverting to
+  the old blind destructure with `IASearchCollection` present gives
+  `TS2339: Property 'id' does not exist on type 'IAImport'`). So this is a *third*
+  compile-time forcing function beyond the two `Record` maps step 4 names — but only for
+  collection types that omit fields the existing members all share. A new member that keeps
+  the same shape as its siblings (a different `id`-bearing collection, say) would compile
+  cleanly through these same call sites with no warning, so don't rely on this catching
+  every case — it only fires when the new member's shape is a strict subset of what existing
+  code destructures.
 
 ## Design consideration: import-by-reference vs. a real copy
 
