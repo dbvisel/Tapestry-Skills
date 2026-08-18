@@ -34,6 +34,9 @@ moved on and this skill needs re-verifying (see `last_verified`).
 - Any task that needs to produce `root.json` or a tapestry export bundle by hand
 - Paired with `tapestry-zip-analysis` (that skill depends on this one for the schema
   reference) when you need to inspect an *existing* zip instead of building a new one
+- Producing a zip to preview in the standalone `/viewer` app (see
+  `tapestry-viewer-embedding`) without needing the full server/DB/auth stack — see
+  "Previewing a hand-built zip in `/viewer`" below
 
 ## The short version: use the bundled script
 
@@ -337,6 +340,34 @@ filename" to reuse when re-uploading. This has one sharp edge, verified directly
 > thumbnail (their destination keys are generated fresh, not parsed back out of the
 > filename) — only to a media item's own `source`. Always include the parenthesized
 > segment on every entry regardless, for consistency; the bundled script always does.
+>
+> **This specific crash is server-import-specific — it does NOT affect `/viewer`.**
+> `/viewer`'s own zip-reading code (`viewer/src/services/import-service.ts`) resolves
+> `file:/` references by plain exact-filename lookup only; it never re-parses a
+> parenthesized segment out of the name (there's nothing to re-upload in a read-only
+> viewer). A zip missing the parens would **render fine in `/viewer`** while still
+> crashing a real server-side import — don't let a working viewer preview convince you
+> the parens don't matter if the zip is ever meant to go through the real importer too.
+
+## Previewing a hand-built zip in `/viewer`
+
+`asteasolutions/tapestry-project` ships a standalone, read-only viewer app (`/viewer`
+— see `tapestry-viewer-embedding` for packaging it for a non-website host) that parses
+`root.json` via **the exact same `parseRootJson`/`FILE_PREFIX`/`ROOT_FILE` code and the
+same `@zip.js/zip.js` library** as the real server importer (confirmed directly in
+`viewer/src/services/import-service.ts`) — just entirely client-side, no server, DB, or
+auth involved. That makes it the fastest way to visually sanity-check a zip built with
+this skill's script: point the viewer at it via `?source=<url>` (or drag-and-drop it
+onto the viewer's own import UI) and see it actually render, without needing any of the
+infrastructure a full import requires. See `tapestry-viewer-embedding` for how to build
+and host `/viewer` itself; nothing about *that* process is specific to a hand-built zip
+versus a real export — the viewer can't tell the difference, which is the point.
+
+One asymmetry worth knowing: the viewer's asset resolution is slightly more lenient than
+the server's (see the callout above — it doesn't need the parenthesized filename
+segment), so a zip that previews correctly in `/viewer` is not proof it will survive a
+real server-side import. Use `tapestry-zip-analysis`'s bundled script for that check
+instead; use the viewer for a visual check, not a validity check.
 
 ## Guardrails
 
@@ -359,6 +390,10 @@ filename" to reuse when re-uploading. This has one sharp edge, verified directly
    or not at all.
 7. Prefer the bundled script over hand-writing — it makes the naming-convention and
    `file:/`-prefixing gotchas structurally impossible to get wrong.
+8. **A zip that previews correctly in `/viewer` is not proof it will pass a real
+   server-side import** — the viewer's file-matching is more lenient (see the
+   parenthesized-filename callout above). Validate with `tapestry-zip-analysis` before
+   trusting a visual check alone.
 
 ## Bundled scripts
 

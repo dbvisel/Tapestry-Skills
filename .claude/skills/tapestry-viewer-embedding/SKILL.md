@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["embed tapestry viewer", "package viewer", "vite build --base", "standalone viewer"]
   - keywords: ["WordPress block", "Gutenberg block", "macOS app", "file:// CORS module"]
   - keywords: ["source query param", "same-origin fetch", "tapestry zip"]
-last_verified: 2026-08-12
+last_verified: 2026-08-18
 ---
 
 Recipe for taking `/viewer` — the standalone, read-only Tapestry viewer that already ships
@@ -48,6 +48,17 @@ wherever it'll be served from, and (2) pointing it at a URL via `?source=`** —
 writing any new viewer code. Reach for `tapestry-content-types`/`tapestry-webpage-types`
 instead if the actual goal is changing what the viewer can *render*; this skill is purely
 about hosting the existing thing somewhere else.
+
+If the zip being pointed at is fixed at packaging time — one app, one specific tapestry,
+nothing chosen at runtime — see `tapestry-standalone-viewer`, which specializes this
+recipe into a single bundled script producing a self-contained static folder (no
+`?source=` param, no CORS setup, since the zip ships same-origin with the viewer). If
+that zip needs to be constructed or validated first rather than being a real export from
+the app, see `tapestry-zip-authoring`/`tapestry-zip-analysis` — the viewer parses
+`root.json` via the exact same `parseRootJson`/`FILE_PREFIX`/`ROOT_FILE` code path as the
+server importer (confirmed in `viewer/src/services/import-service.ts`), so anything
+valid per those skills renders correctly here too, with no server, DB, or auth involved —
+often the fastest way to visually sanity-check a hand-built zip.
 
 ## The core recipe (both reference integrations do exactly this)
 
@@ -165,3 +176,6 @@ integration is being pitched as "works offline."
    embeddable like this in the first place (no auth, no sockets, `core-client`-only), and
    `tapestry-content-types`/`tapestry-webpage-types` if the actual goal is changing what the
    viewer renders rather than where it's hosted.
+7. For the fixed-single-zip packaging case, use `tapestry-standalone-viewer` rather than
+   re-deriving its redirect-shim approach by hand. For constructing or validating the zip
+   itself, see `tapestry-zip-authoring`/`tapestry-zip-analysis`.
