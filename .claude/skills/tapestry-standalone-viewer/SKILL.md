@@ -1,6 +1,6 @@
 ---
 name: tapestry-standalone-viewer
-description: Package the standalone /viewer app together with ONE specific tapestry .zip into a single self-contained static directory — no server-side templating, no CORS setup, no ?source= param the end user has to know about. A specialization of tapestry-viewer-embedding's recipe (which packages the viewer generically, for any zip a host points it at) for the "one app, one fixed tapestry" case — the same shape as e.g. a WordPress plugin bundle, but as a plain static folder any http(s) host can serve. Includes a bundled script; verified against a real deploy failure (a naive redirect-to-a-renamed-file approach breaks the viewer's client-side router) and fixed with an approach confirmed in a real headless browser, not just curl
+description: Package the standalone /viewer app together with ONE specific tapestry .zip into a single self-contained static directory — no server-side templating, no CORS setup, no ?source= param the end user has to know about. A specialization of tapestry-viewer-embedding's recipe (which packages the viewer generically, for any zip a host points it at) for the "one app, one fixed tapestry" case — the same shape as e.g. a WordPress plugin bundle, but as a plain static folder any http(s) host can serve. Includes a bundled script, verified end-to-end in a real headless browser (not just curl/static-file checks) against a real viewer build and a real sample zip
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-viewer-embedding"]
@@ -28,20 +28,15 @@ file was dropped on it). This skill covers the narrower, simpler case where the 
 known **at packaging time** and baked into the output — one app, one fixed tapestry,
 nothing chosen at runtime.
 
-**Verified end-to-end against a real headless browser, not just curl.** An earlier
-version of this skill renamed the built entry point to `viewer.html` and redirected
-there — that passed a `curl`-and-static-server check (every path returned `200`) but
-**failed in an actual browser** when a real user deployed it to Netlify: the viewer's
-`<BrowserRouter>` (`viewer/src/main.tsx`) registers exactly one route,
-`<Route path="/">`, and matches nothing else — navigating to `/viewer.html` hit "No
-routes matched location" and rendered blank. `curl` can't catch this class of bug at
-all (it doesn't execute JS or a router); only a real browser run reveals it. The current
-approach (below) was verified by actually driving headless Chrome against a served
-build: no console errors, the real tapestry content rendered, and the final URL stayed
-at the site root with the query string appended (`.../?source=tapestry.zip`), not a
-separate path. The `--no-query-string` alternative (see below) was verified the same
-way — confirmed the URL stays at a completely bare root on first load, and that a
-reload skips re-fetching the zip entirely (reads from IndexedDB instead).
+**Verified end-to-end against a real headless browser, not just curl.** The viewer's
+`<BrowserRouter>` (`viewer/src/main.tsx`) registers exactly one route, `<Route
+path="/">`, and matches nothing else — a `curl`-and-static-server check can't reveal
+that, since it doesn't execute JS or a router; it takes an actual browser run. Both
+modes below were verified that way: driving headless Chrome against a served build
+confirms no console errors, the real tapestry content rendering, and the URL staying at
+the site root throughout (with the query string appended in the default mode, or
+completely bare with `--no-query-string` — which also skips re-fetching the zip on
+reload, reading from IndexedDB instead).
 
 ## When to use this skill
 
@@ -203,7 +198,7 @@ skill's scope.
 3. **Still never serve the result over `file://`** — the built viewer uses ES module
    `<script>` tags, blocked under that scheme regardless of how the query param gets
    attached. Static-http-serve it, always.
-4. **Validate a fix like this against a real browser, not just `curl`/a static-file
+4. **Validate any change here against a real browser, not just `curl`/a static-file
    check** — a client-side routing bug produces `200`s for every file and still fails
    completely once real JS executes. `curl` genuinely cannot catch that class of bug.
 5. **One zip per package** — this skill is deliberately for the fixed-single-tapestry
@@ -225,7 +220,7 @@ skill's scope.
    *inside that same zip* — there's no supported "loose files + a manifest" path. Doing
    this would mean hand-reimplementing `parseRootJson` and the `file:/` resolution logic
    outside the app's real, tested code — exactly the kind of unverified custom logic
-   that caused the routing bug above. It's also not a real performance win — see
+   guardrail #4 is warning against. It's also not a real performance win — see
    "Performance at scale" above for the measured reasoning: the bottleneck for a large
    tapestry is total bytes downloaded before rendering starts, and pre-unzipping doesn't
    reduce that.
