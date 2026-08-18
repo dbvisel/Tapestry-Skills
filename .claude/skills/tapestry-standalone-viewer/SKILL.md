@@ -157,6 +157,40 @@ relative URL) is always same-origin with whatever static host serves the folder,
 construction. This is the main simplification this skill's narrower scope buys over the
 general recipe.
 
+## Performance at scale: network download dominates, not unzipping
+
+Real public tapestries range from a few MB to 400+ MB. **Measured directly** (real
+headless Chrome, the same package this skill produces, a real 430 MB / 236-item / 821
+zip-entry tapestry, served over loopback so network transfer cost is negligible): the
+zip finished transferring in ~1.1s, and real canvas content was rendering by ~4.6–5.4s
+total — meaning the client-side unzip-and-decompress-everything step
+(`ImportService.parse`'s `Promise.all` over every item's source and every thumbnail
+rendition, `viewer/src/services/import-service.ts`) cost only a few seconds even for
+236 items and hundreds of renditions. JS heap stayed at 22–41 MB throughout — the
+decompressed bytes live in browser-managed Blob storage, not the JS heap, so this isn't
+a heap-exhaustion risk either.
+
+**The real cost at scale is the download itself, not decompression.** `app.tsx` loads
+the zip via `fetch(source).arrayBuffer()`, which cannot return until the *entire*
+response body has arrived — there's no client-side streaming or HTTP range-request
+support (contrast the *server* importer, `tapestry-import-service.ts`, which does use
+range requests via `zip.js`'s `HttpReader`; the browser viewer doesn't). So for a real
+deployment of a 400+ MB tapestry on ordinary broadband (~5–10 MB/s), expect **tens of
+seconds to a couple of minutes of blank-screen download time** before anything renders
+— that's inherent to the current viewer, not something this packaging skill introduces
+or can fix.
+
+**Pre-unzipping does not help this, and can make it worse.** The bottleneck is total
+bytes that must arrive before rendering starts, not the zip container format — a
+pre-extracted folder loaded by an equivalent "fetch everything, then render" approach
+faces the identical download-time cost, and loses the zip's compression and single-request
+efficiency in the process (see guardrail below). The only thing that would actually help
+a very large tapestry load faster is genuine lazy loading — fetching `root.json` first,
+then only the assets for items actually on screen — which means a materially different
+loader that doesn't go through `ImportService` at all. That's a real gap in `/viewer`
+itself worth flagging if it comes up, not something to attempt inside this packaging
+skill's scope.
+
 ## Guardrails
 
 1. **Read `tapestry-viewer-embedding` first** — this skill only covers the packaging
@@ -191,9 +225,10 @@ general recipe.
    *inside that same zip* — there's no supported "loose files + a manifest" path. Doing
    this would mean hand-reimplementing `parseRootJson` and the `file:/` resolution logic
    outside the app's real, tested code — exactly the kind of unverified custom logic
-   that caused the routing bug above. It also isn't obviously more efficient: the zip is
-   fetched lazily via one real, cacheable HTTP request and is already
-   deflate-compressed.
+   that caused the routing bug above. It's also not a real performance win — see
+   "Performance at scale" above for the measured reasoning: the bottleneck for a large
+   tapestry is total bytes downloaded before rendering starts, and pre-unzipping doesn't
+   reduce that.
 
 ## Bundled scripts
 
