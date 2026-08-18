@@ -25,13 +25,24 @@ skill content, to start.
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from three real (unmerged) reference implementations of that extension |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
+| [`tapestry-visibility`](.claude/skills/tapestry-visibility/SKILL.md) | Managing a tapestry's visibility (private/link/public) on a running installation via the bundled `manage-tapestry-visibility.sh` script, including how "public" surfaces it in every client's "Samples" list |
+| [`tapestry-backups`](.claude/skills/tapestry-backups/SKILL.md) | Backing up a Tapestry installation's Postgres database and MinIO object storage via the bundled `backup-tapestry.sh` script (interactive or scheduled), plus how to restore |
+| [`tapestry-zip-authoring`](.claude/skills/tapestry-zip-authoring/SKILL.md) | Constructing a valid tapestry export/import `.zip` from scratch — the full `root.json` schema and file-naming convention, plus a bundled, dependency-free builder script. **Does not require a `tapestry-project` checkout** — verified directly against the real app's schema/import behavior rather than derived from reading its source |
+| [`tapestry-zip-analysis`](.claude/skills/tapestry-zip-analysis/SKILL.md) | Analyzing an existing tapestry `.zip` — version, item inventory, groups/rels/presentation structure, and whether it's actually importable — via a bundled, dependency-free analyzer script. **Does not require a `tapestry-project` checkout**; depends on `tapestry-zip-authoring` for the schema reference, not on the app's source |
 
 ## Using these skills
 
-Copy `.claude/skills/` into a `tapestry-project` checkout (or symlink it), or point
-your agent's skill-search path at this repo. Each `SKILL.md` cross-references its
-siblings (e.g. the client and server skills each note where the auth-provider or
-live-update story continues on the other side).
+Every skill except `tapestry-zip-authoring`/`tapestry-zip-analysis` is about working on
+`tapestry-project` itself, so copy `.claude/skills/` into a checkout of that repo (or
+symlink it), or point your agent's skill-search path at this repo. Each `SKILL.md`
+cross-references its siblings (e.g. the client and server skills each note where the
+auth-provider or live-update story continues on the other side).
+
+`tapestry-zip-authoring` and `tapestry-zip-analysis` are the exception: they document
+the tapestry export/import `.zip` format itself (verified against the real app, not
+just read from it) and ship bundled, dependency-free scripts to build/analyze one —
+usable anywhere, with no `tapestry-project` checkout, running server, or repo access of
+any kind required.
 
 ## Status
 
