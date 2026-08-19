@@ -54,8 +54,8 @@ hand — the script exists for the safety rails (confirmation prompt, injection-
 filtering, a read-only preflight check that the database is even reachable
 before showing you anything) more than for saving keystrokes.
 
-Overridable via environment variables (defaults shown, matching
-`tapestry-production-deployment`'s `docker-compose-fnf.yml` setup):
+Overridable via environment variables (defaults shown, matching a production
+deployment's `docker-compose-fnf.yml` setup):
 
 ```bash
 COMPOSE_FILE=docker-compose-fnf.yml
@@ -85,8 +85,8 @@ wrong row by id when several tapestries share a similar title.
 ## Guardrails
 
 1. **This script is VM/fork-only, not upstream** — like `docker-compose-fnf.yml`
-   itself, it's not part of `internetarchive/tapestry-project`; it assumes the
-   Postgres access pattern that deployment uses (see `tapestry-production-deployment`).
+   itself, it's not part of `internetarchive/tapestry-project`; it assumes a
+   production-style Postgres access pattern.
 2. **`public` has real reach** — it's not "shareable," it's "discoverable by
    anyone on the installation." Confirm that's actually intended before setting it,
    especially when a search-by-title match is ambiguous (the picker shows

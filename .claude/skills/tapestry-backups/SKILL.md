@@ -7,7 +7,7 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["backup tapestry", "pg_dump tapestry", "backup-tapestry.sh", "minio backup"]
   - keywords: ["restore tapestry database", "cron backup docker", "systemd timer backup rootless docker"]
-last_verified: 2026-08-13
+last_verified: 2026-08-19
 ---
 
 Back up a Tapestry installation's Postgres database, and its MinIO object storage
@@ -34,8 +34,8 @@ to be safe both run by hand and run unattended on a schedule.
   mounted at `/data`,
   rather than assuming a volume name. Compose derives volume names from the
   project name (the checkout directory name by default), which differs between
-  installs — see `tapestry-production-deployment`'s note on this. A throwaway
-  `alpine` container then mounts that volume read-only and tars it.
+  installs. A throwaway `alpine` container then mounts that volume read-only and
+  tars it.
 - If no `minio` service is running (not part of this install, or the install
   uses a real AWS S3 backend instead — see `tapestry-local-dev-environment`),
   the MinIO step is skipped cleanly. That's not an error condition.
@@ -132,9 +132,9 @@ its name depends on the project/checkout directory name.
 4. **A missing MinIO container isn't a failure** — treat it as "this install
    uses a different S3 backend," not "something's broken," per
    `tapestry-local-dev-environment`'s AWS-vs-MinIO distinction.
-5. **Don't hardcode volume names** — discover them from the running container,
-   same reasoning as `tapestry-production-deployment`'s note on Compose project
-   naming.
+5. **Don't hardcode volume names** — discover them from the running container;
+   Compose derives them from the checkout directory name, which varies between
+   installs.
 
 ## Bundled scripts
 

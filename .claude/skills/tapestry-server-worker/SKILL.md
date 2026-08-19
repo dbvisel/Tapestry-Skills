@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["tapestry-project server", "tapestry-project worker", "server/src", "REST resource", "base-resource.ts"]
   - keywords: ["Prisma", "BullMQ", "thumbnail generation", "S3 presigned URL", "MinIO", "Vault", "user secret"]
   - keywords: ["socket.io server", "tapestry-updated", "LISTEN NOTIFY", "auth provider server"]
-last_verified: 2026-08-12
+last_verified: 2026-08-19
 ---
 
 Backend conventions for `tapestry-project`'s `server`/`worker` — where things live, how
@@ -95,8 +95,7 @@ is the entire deploy step, no manual `migrate deploy` needed. The `worker` proce
 **not** run migrations itself; it relies on `server` (or a manual deploy) having applied
 them first. Because of the auto-deploy-on-boot behavior, **check any new migration for
 destructive changes** (dropped columns/tables, non-nullable column added without a
-default) before restarting `server` in an environment with real data — see
-`tapestry-production-deployment` for the full pre-update checklist.
+default) before restarting `server` in an environment with real data.
 
 ## Job queue (BullMQ)
 
@@ -154,7 +153,7 @@ token, and re-authenticates when the lease is close to expiring.
 `server/src/services/user-secret-service.ts` (`UserSecretService`, constructed per
 `userId`) builds paths as `secret/data/users/{userId}/{key}` — matching the
 `secret/data/users/*` Vault policy seeded by the compose entrypoint (see
-`tapestry-local-dev-environment`/`tapestry-production-deployment`). KV-v2 writes need
+`tapestry-local-dev-environment`). KV-v2 writes need
 the double `data` wrapper (`{ data: { value } }`); reads unwrap `result.data.data.data.value`
 (yes, three `data`s — v2 API wrapper + your own wrapper).
 
@@ -218,5 +217,5 @@ than inventing a second fan-out mechanism.
    `registerUser` are real auth strategies** — adding another is new work, not
    a config toggle. See `tapestry-auth-providers` for the full checklist.
 5. See `tapestry-client-features` for the matching client-side conventions (item types,
-   auth provider registration, socket-manager) and `tapestry-local-dev-environment` /
-   `tapestry-production-deployment` for how these services are actually run.
+   auth provider registration, socket-manager) and `tapestry-local-dev-environment`
+   for how these services are actually run locally.

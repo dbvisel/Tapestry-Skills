@@ -207,9 +207,6 @@ Hard-refresh the browser afterward — the old bundle may be cached.
 5. **Don't rename the checkout directory** if using Docker Compose for
    anything — Compose derives the project/volume names from it, and renaming
    orphans existing data into fresh empty volumes.
-6. If you're setting up the **production** VM deployment instead (a specific
-   fork's customized archive.org branch), see `tapestry-production-deployment`
-   — that skill is explicitly about a customization, not upstream.
 
 ## Bundled scripts and assets (fork-variation installer, not upstream)
 

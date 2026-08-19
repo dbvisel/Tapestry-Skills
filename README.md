@@ -19,7 +19,6 @@ doesn't yet justify.
 | Skill | Covers |
 |---|---|
 | [`tapestry-local-dev-environment`](.claude/skills/tapestry-local-dev-environment/SKILL.md) | Running the app locally the way upstream documents it (npm workspaces, per-workspace `.env` files, LocalStack/Redis/Vault via `docker-compose.local.yml`, Vite dev server) — plus a clearly-separated note on a Docker+MinIO installer variation that exists only on some forks, and the CSP issue that only shows up there |
-| [`tapestry-production-deployment`](.claude/skills/tapestry-production-deployment/SKILL.md) | Updating a customized production VM deployment — fork/merge workflow, `docker-compose-fnf.yml` specifics, and the resource-contention outage to avoid repeating |
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
