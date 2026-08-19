@@ -1,6 +1,6 @@
 ---
 name: tapestry-local-dev-environment
-description: Run asteasolutions/tapestry-project locally the way upstream documents (npm workspaces, per-workspace .env files, LocalStack/Redis/Vault via docker-compose.local.yml, Vite dev server) — plus notes on a Docker+MinIO installer variation that exists only on some forks
+description: Run internetarchive/tapestry-project locally the way upstream documents (npm workspaces, per-workspace .env files, LocalStack/Redis/Vault via docker-compose.local.yml, Vite dev server) — plus notes on a Docker+MinIO installer variation that exists only on some forks
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -11,7 +11,7 @@ skill_discovery_hints:
 last_verified: 2026-08-19
 ---
 
-Run Tapestries locally. **`asteasolutions/tapestry-project` (`main`) is the definitive
+Run Tapestries locally. **`internetarchive/tapestry-project` (`main`) is the definitive
 upstream** — this skill documents that flow first. A personal fork (e.g.
 `dbvisel/tapestry-project`) may carry its own branches with real but *non-default*
 variations (a Docker+MinIO installer, archive.org-specific customizations); those are
@@ -33,7 +33,7 @@ checkout.
   `npm run *:start` scripts wrap `docker compose` for these.
 - A checkout of `tapestry-project` (this repo is fork-friendly: work happens
   against a personal fork with a remote named after your GitHub username,
-  `origin` pointing at `asteasolutions/tapestry-project`).
+  `origin` pointing at `internetarchive/tapestry-project`).
 
 ## 1. Install and configure
 
@@ -128,7 +128,7 @@ is "often more convenient."
 
 ## No CSP issue on upstream
 
-Upstream's `client/index.html` (checked `asteasolutions/tapestry-project`
+Upstream's `client/index.html` (checked `internetarchive/tapestry-project`
 `main`) has **no `Content-Security-Policy` meta tag at all** — nothing to
 violate, nothing to patch. If you're hitting CSP errors on `localhost`, you
 are not on a plain upstream checkout; see the next section.
@@ -141,7 +141,7 @@ root `.env.sample`/`.env` (instead of per-workspace `server/.env`/`client/.env`)
 `docker-compose.minio.yml`, and `Dockerfile.client-minio` — using MinIO instead
 of LocalStack, and building the client into an nginx image instead of running
 Vite dev server. If you have these files, they are **not part of
-`asteasolutions/tapestry-project`** — they're a specific fork's addition. This
+`internetarchive/tapestry-project`** — they're a specific fork's addition. This
 skill bundles copies if you need them: `scripts/setup.sh` is interactive
 (`./setup.sh` or `./setup.sh --no-start`), regenerates missing secrets, and
 idempotently re-runs against an existing `.env`; the config templates it reads
@@ -193,7 +193,7 @@ Hard-refresh the browser afterward — the old bundle may be cached.
 
 ## Guardrails
 
-1. **Treat `asteasolutions/tapestry-project` `main` as ground truth.** Verify
+1. **Treat `internetarchive/tapestry-project` `main` as ground truth.** Verify
    any fork-specific claim (file presence, CSP, installer scripts) against the
    actual branch/checkout in front of you before assuming it generalizes.
 2. **Env files are per-workspace upstream** (`server/.env`, `client/.env`) —

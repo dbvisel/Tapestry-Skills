@@ -1,6 +1,6 @@
 ---
 name: tapestry-auth-providers
-description: Add a new external login provider to asteasolutions/tapestry-project (ia/google today) — the full client+server+schema+deployment checklist, generalized from two real reference implementations (ORCID, MediaWiki OAuth) on unmerged fork branches
+description: Add a new external login provider to internetarchive/tapestry-project (ia/google today) — the full client+server+schema+deployment checklist, generalized from two real reference implementations (ORCID, MediaWiki OAuth) on unmerged fork branches
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -17,7 +17,7 @@ the two that ship today (`ia`, `google` — see `tapestry-client-features`/
 ORCID and MediaWiki OAuth logins — built on unmerged branches of a fork
 (`dbvisel/tapestry-project` branches `orcid-login`, `mediawiki-login`, each a single commit
 on top of that fork's `main`). **Neither provider exists on any current branch of
-`asteasolutions/tapestry-project` or `dbvisel/tapestry-project`'s default branches** — they
+`internetarchive/tapestry-project` or `dbvisel/tapestry-project`'s default branches** — they
 are reference examples for this skill, not implemented features. Don't tell a user ORCID or
 MediaWiki login already works; use these as the template for building a *new* one.
 

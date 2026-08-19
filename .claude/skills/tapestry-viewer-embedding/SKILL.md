@@ -1,6 +1,6 @@
 ---
 name: tapestry-viewer-embedding
-description: Package asteasolutions/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code; the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work
+description: Package internetarchive/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code; the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -26,7 +26,7 @@ work — not present on any long-lived branch:
 - **A macOS drag-and-drop opener** — an `.app` you drop an exported `.zip` onto, which opens
   it in your default browser.
 
-**Neither integration exists on any current branch of `asteasolutions/tapestry-project` or
+**Neither integration exists on any current branch of `internetarchive/tapestry-project` or
 any default fork branch** — they're reference examples for this skill's packaging pattern,
 not features to claim already exist. Don't tell a user there's a real WordPress plugin or
 macOS app available; use this as the template for building a *new* host integration.

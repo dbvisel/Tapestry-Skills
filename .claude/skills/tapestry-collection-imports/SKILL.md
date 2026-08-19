@@ -21,7 +21,7 @@ anywhere; it only drives the picker.
 
 **The picker mechanism is real, existing upstream functionality** — `HandleIAImportDialog`,
 `IAImport`, and the whole `import-items-list/` component tree already exist on
-`asteasolutions/tapestry-project` `main` with real commit history (code review, bug fixes),
+`internetarchive/tapestry-project` `main` with real commit history (code review, bug fixes),
 originally built for Internet Archive collections and playlists. **This skill is about
 extending that mechanism with a new collection type**, generalized from three example
 extensions of exactly this kind:

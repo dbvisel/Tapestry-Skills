@@ -1,6 +1,6 @@
 ---
 name: tapestry-webpage-types
-description: Add a new known webpage type to asteasolutions/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed OR fully custom DOM-rendering treatment, without adding a whole new item type. Generalized from four real reference implementations (SoundCloud, Spotify, Sketchfab, Wikipedia) found in unmerged exploratory work
+description: Add a new known webpage type to internetarchive/tapestry-project — recognizing a URL (e.g. soundcloud.com) and giving it special embed OR fully custom DOM-rendering treatment, without adding a whole new item type. Generalized from four real reference implementations (SoundCloud, Spotify, Sketchfab, Wikipedia) found in unmerged exploratory work
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -27,7 +27,7 @@ treat the patterns below as the durable artifact, not any particular branch they
   directly inside a fully custom item component.
 
 **None of SoundCloud, Spotify, Sketchfab, or Wikipedia support exists on any current branch
-of `asteasolutions/tapestry-project` or any default fork branch** — these are reference
+of `internetarchive/tapestry-project` or any default fork branch** — these are reference
 examples for this skill, not implemented features. Don't tell a user any of the four
 already works. (Note: Sketchfab hosts 3D models, but this implementation embeds Sketchfab's
 *own* hosted viewer via iframe — it is not related to `tapestry-content-types`' `model3d`

@@ -1,6 +1,6 @@
 ---
 name: tapestry-zip-authoring
-description: Construct a valid Tapestry .zip file (a tapestry export/import bundle — root.json plus bundled media files) from scratch, e.g. to programmatically generate a new tapestry from other data. Includes the full current (v7) schema, the zip's file-naming convention, and a bundled builder script — verified directly against the real app's Zod schema and a real import-time crash, so this doesn't require opening asteasolutions/tapestry-project's source
+description: Construct a valid Tapestry .zip file (a tapestry export/import bundle — root.json plus bundled media files) from scratch, e.g. to programmatically generate a new tapestry from other data. Includes the full current (v7) schema, the zip's file-naming convention, and a bundled builder script — verified directly against the real app's Zod schema and a real import-time crash, so this doesn't require opening internetarchive/tapestry-project's source
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -11,7 +11,7 @@ skill_discovery_hints:
 last_verified: 2026-08-18
 ---
 
-How to build a `.zip` file that `asteasolutions/tapestry-project` will accept as a
+How to build a `.zip` file that `internetarchive/tapestry-project` will accept as a
 tapestry import — either by hand or, more reliably, via this skill's bundled
 `scripts/build-tapestry-zip.py`. Useful for generating a new tapestry from some other
 data source (a spreadsheet, a folder of images, a scrape) without going through the
@@ -351,7 +351,7 @@ filename" to reuse when re-uploading. This has one sharp edge, verified directly
 
 ## Previewing a hand-built zip in `/viewer`
 
-`asteasolutions/tapestry-project` ships a standalone, read-only viewer app (`/viewer`
+`internetarchive/tapestry-project` ships a standalone, read-only viewer app (`/viewer`
 — see `tapestry-viewer-embedding` for packaging it for a non-website host) that parses
 `root.json` via **the exact same `parseRootJson`/`FILE_PREFIX`/`ROOT_FILE` code and the
 same `@zip.js/zip.js` library** as the real server importer (confirmed directly in

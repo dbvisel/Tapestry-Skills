@@ -1,6 +1,6 @@
 ---
 name: tapestry-client-features
-description: Add UI functionality to asteasolutions/tapestry-project's client — new canvas item types, toolbar features, auth providers, and build-time config, following the existing core/core-client/client/viewer layering
+description: Add UI functionality to internetarchive/tapestry-project's client — new canvas item types, toolbar features, auth providers, and build-time config, following the existing core/core-client/client/viewer layering
 license: MIT
 compatibility: claude-code
 depends_on: []

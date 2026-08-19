@@ -1,6 +1,6 @@
 ---
 name: tapestry-zip-analysis
-description: Analyze an existing Tapestry .zip file (a tapestry export/import bundle) to report what it contains — version, item counts and types, groups/rels/presentation structure, and whether it's actually valid/importable — without needing asteasolutions/tapestry-project's source or a running server. Depends on tapestry-zip-authoring for the full root.json schema reference
+description: Analyze an existing Tapestry .zip file (a tapestry export/import bundle) to report what it contains — version, item counts and types, groups/rels/presentation structure, and whether it's actually valid/importable — without needing internetarchive/tapestry-project's source or a running server. Depends on tapestry-zip-authoring for the full root.json schema reference
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-zip-authoring"]

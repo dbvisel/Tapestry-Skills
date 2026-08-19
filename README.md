@@ -1,7 +1,7 @@
 # Tapestry-Skills
 
 Claude Code / Claude Agent skills for working on
-[`asteasolutions/tapestry-project`](https://github.com/asteasolutions/tapestry-project)
+[`internetarchive/tapestry-project`](https://github.com/internetarchive/tapestry-project)
 ("Tapestries") — a canvas/annotation web app with a `core` / `core-client` / `client` /
 `server` / `shared` / `viewer` npm-workspaces monorepo.
 
@@ -70,7 +70,7 @@ against a from-scratch read by anyone but the agent that wrote it. Treat facts i
 as accurate as of the `last_verified` date in each `SKILL.md`'s frontmatter, and expect
 some upstream drift over time (e.g. new Prisma migrations, new item types).
 
-**`asteasolutions/tapestry-project` `main` is treated as the definitive upstream
+**`internetarchive/tapestry-project` `main` is treated as the definitive upstream
 throughout.** A personal fork (e.g. `dbvisel/tapestry-project`) carries several
 real but non-default variations across different branches — a Docker+MinIO local-dev
 installer (`dbvisel/main`), archive.org-specific production customizations including a
@@ -95,7 +95,7 @@ during review, in case future editors hit the same trap:
   is explicit that ORCID/MediaWiki login don't exist today, only the pattern for adding
   something like them does.
 - Same story for `tapestry-content-types`, built from `iiif-upstream` (a single clean
-  commit, but this one directly on top of upstream `asteasolutions/main` rather than
+  commit, but this one directly on top of upstream `internetarchive/main` rather than
   `dbvisel/main`) plus, later, the `model3d` item type found in a separate, giant,
   deliberately-messy commit that bundles in a lot of unrelated work — not present on any
   long-lived branch; only the lines actually touching `model3d` were used. Neither IIIF nor

@@ -35,7 +35,7 @@ patterns below as the durable artifact, not any particular branch they came from
   the search-results page the user came from and is correctly ignored — the parser matches
   against the path alone).
 
-**Neither exists on any current branch of `asteasolutions/tapestry-project` or any default
+**Neither exists on any current branch of `internetarchive/tapestry-project` or any default
 fork branch** — these are reference examples for this skill, not implemented features.
 
 **Scope note**: both reference implementations also support a *bulk* variant (importing

@@ -85,7 +85,7 @@ wrong row by id when several tapestries share a similar title.
 ## Guardrails
 
 1. **This script is VM/fork-only, not upstream** — like `docker-compose-fnf.yml`
-   itself, it's not part of `asteasolutions/tapestry-project`; it assumes the
+   itself, it's not part of `internetarchive/tapestry-project`; it assumes the
    Postgres access pattern that deployment uses (see `tapestry-production-deployment`).
 2. **`public` has real reach** — it's not "shareable," it's "discoverable by
    anyone on the installation." Confirm that's actually intended before setting it,

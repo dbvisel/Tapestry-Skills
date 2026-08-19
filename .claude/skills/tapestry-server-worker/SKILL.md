@@ -1,6 +1,6 @@
 ---
 name: tapestry-server-worker
-description: Add or modify backend functionality in asteasolutions/tapestry-project's server/worker — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed per-user secrets, auth providers, and Socket.io live updates
+description: Add or modify backend functionality in internetarchive/tapestry-project's server/worker — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed per-user secrets, auth providers, and Socket.io live updates
 license: MIT
 compatibility: claude-code
 depends_on: []

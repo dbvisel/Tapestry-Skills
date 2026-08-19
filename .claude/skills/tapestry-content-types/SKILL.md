@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to asteasolutions/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one
+description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -17,14 +17,14 @@ alongside the ones that ship today (`text`, `actionButton`, `audio`, `book`, `im
 complete reference implementations on unmerged fork branches:
 
 - **IIIF deep-zoom image support** — `dbvisel/tapestry-project` branch `iiif-upstream`, a
-  single clean commit directly on top of upstream `asteasolutions/tapestry-project` `main`.
+  single clean commit directly on top of upstream `internetarchive/tapestry-project` `main`.
 - **STL 3D model viewing (`model3d`)** — one part of a single giant, admittedly messy
   commit found in unmerged exploratory work, which bundles in a lot of unrelated work. Only
   the files/lines that actually touch `model3d` were used here — the rest of that commit was
   deliberately ignored as noise. Not present on any long-lived branch.
 
 **Neither IIIF nor `model3d` support exists on any current branch of
-`asteasolutions/tapestry-project`** — both are reference examples for this skill, not
+`internetarchive/tapestry-project`** — both are reference examples for this skill, not
 implemented features. Don't tell a user either one already works; use this as the template
 for adding a *new* type. The two examples are complementary: IIIF needed real async
 resolution logic and a dedicated item factory; `model3d` needed neither, and instead
