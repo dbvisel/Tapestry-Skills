@@ -1,0 +1,6 @@
+# Python bytecode/caches — every bundled and repo-tooling .py script generates these
+__pycache__/
+*.py[cod]
+
+# macOS Finder metadata
+.DS_Store

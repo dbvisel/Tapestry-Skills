@@ -48,6 +48,21 @@ just read from it) and ship bundled, dependency-free scripts to build/analyze on
 usable anywhere, with no `tapestry-project` checkout, running server, or repo access of
 any kind required.
 
+## Maintaining this repo
+
+`tools/verify-skills.py` (repo-root tooling, distinct from any skill's own
+`scripts/`) is a structural self-check — every `SKILL.md` has complete, well-formed
+frontmatter, `last_verified` isn't stale, `depends_on` targets exist, bundled files are
+documented and documented paths exist. Run it before committing a change to
+`.claude/skills/`:
+
+```bash
+python3 tools/verify-skills.py
+```
+
+See `CLAUDE.md` for the fuller set of conventions this repo follows, and the maturity
+model for what (if anything) to add beyond this as the repo grows.
+
 ## Status
 
 Built from a hands-on local-dev session plus codebase research — not yet verified
