@@ -12,6 +12,7 @@
 # Usage:
 #   ./manage-tapestry-visibility.sh            # list everything, then pick one
 #   ./manage-tapestry-visibility.sh <search>   # filter by title / slug / owner email
+#   ./manage-tapestry-visibility.sh --help     # show this help
 #
 # Overridable via environment variables (defaults shown):
 #   COMPOSE_FILE=docker-compose-fnf.yml
@@ -19,6 +20,11 @@
 #   DB_SERVICE=db   DB_USER=tapestries   DB_NAME=tapestries
 #
 set -euo pipefail
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  grep '^#' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"

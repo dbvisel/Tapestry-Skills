@@ -7,9 +7,12 @@ Claude Code / Claude Agent skills for working on
 
 Modeled on the structure of [Wikipedia-AI-Skills](https://github.com/fuzheado/Wikipedia-AI-Skills):
 each skill is a `SKILL.md` under `.claude/skills/<name>/`, with `references/` for
-longer supporting docs where useful. This first pass intentionally skips the
-reference repo's CI verification workflows, audit scripts, and test suite — just the
-skill content, to start.
+longer supporting docs and `scripts/` for bundled scripts where useful. This first pass
+intentionally skips the reference repo's CI verification workflows and test suite —
+[`.claude/guidelines/script-audit-guidelines.md`](.claude/guidelines/script-audit-guidelines.md)
+adapts just the substance of its script-audit guidelines to this repo's actual scale (a
+handful of scripts, not dozens), without the CI/pre-commit-hook machinery that scale
+doesn't yet justify.
 
 ## Skills
 

@@ -7,11 +7,11 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry visibility", "make tapestry public", "Samples list", "manage-tapestry-visibility.sh"]
   - keywords: ["private link public tapestry", "TapestryVisibility enum"]
-last_verified: 2026-08-13
+last_verified: 2026-08-19
 ---
 
 Change a tapestry's visibility on a live installation from the command line, via
-`references/manage-tapestry-visibility.sh`.
+`scripts/manage-tapestry-visibility.sh`.
 
 ## When to use this skill
 
@@ -39,6 +39,7 @@ Run from the repo directory on the server, with the stack up:
 ```bash
 ./manage-tapestry-visibility.sh            # list everything, then pick one
 ./manage-tapestry-visibility.sh <search>   # filter by title / slug / owner email
+./manage-tapestry-visibility.sh --help     # show usage
 ```
 
 It lists matching tapestries in a numbered table (title, owner, slug, current
@@ -97,8 +98,8 @@ wrong row by id when several tapestries share a similar title.
    history, so note the "current visibility" it prints before changing anything if
    you might need to revert.
 
-## Bundled reference
+## Bundled scripts
 
 | File | Purpose |
 |---|---|
-| `references/manage-tapestry-visibility.sh` | Interactively list tapestries (optionally filtered) and change one's visibility, with a confirmation prompt before writing. |
+| `scripts/manage-tapestry-visibility.sh` | Interactively list tapestries (optionally filtered) and change one's visibility, with a confirmation prompt before writing. |
