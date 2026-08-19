@@ -129,10 +129,15 @@ module docstring *is* the `--help` output, so there's one source of truth.
   Docker/Postgres/npm (`backup-tapestry.sh`, `setup.sh`,
   `manage-tapestry-visibility.sh`) don't need this constraint — they already assume a
   real installation to operate on.
-- **Bundled scripts live under `scripts/`,** not `references/` — `references/` is for
-  prose supporting docs. (`manage-tapestry-visibility.sh` was the one exception, fixed
-  in this audit; `tapestry-visibility`'s directory layout now matches every other
-  skill's.)
+- **Bundled scripts live under `scripts/`; non-executable templates/configs live
+  under `assets/`; prose supporting docs live under `references/`.** Don't put a
+  `.env.sample`, Dockerfile, or compose file in `scripts/` just because a script in
+  the same skill reads it — `tapestry-local-dev-environment`'s `setup.sh` is the
+  script; the `.env.sample`/`docker-compose.minio.yml`/`Dockerfile.client-minio` it
+  reads are `assets/`, since none of them are code that runs. (Two real
+  inconsistencies were fixed by this audit: `manage-tapestry-visibility.sh` lived
+  under `references/` instead of `scripts/`, and those three config files lived
+  under `scripts/` instead of `assets/`.)
 - **Temp files, if any are ever needed**: `mktemp` + `trap '...' EXIT` in bash,
   `tempfile.NamedTemporaryFile`/`tempfile.mkdtemp` in Python. No script currently
   creates temp files, but this is the pattern to reach for for when one does.

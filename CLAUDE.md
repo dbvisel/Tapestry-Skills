@@ -29,12 +29,24 @@ see README.md's "Using these skills."
   pattern to follow" with "this already works upstream" is the single most common way
   these docs mislead a future reader. State it plainly whichever way it is.
 - Standard sections: "When to use this skill," the checklist/how-to content itself,
-  "Guardrails" (numbered), and — if the skill bundles scripts — a "Bundled scripts"
-  table at the end.
+  "Guardrails" (numbered), and — if the skill bundles anything — a "Bundled scripts"
+  and/or "Bundled assets" table at the end (see below for the distinction).
 
-## Bundled scripts
+## Bundled scripts, references, and assets
 
-- Live under the skill's `scripts/` directory — not `references/`, which is for prose.
+Three distinct directories, don't blur them:
+
+- `scripts/` — executable code (bash/python) the agent runs.
+- `references/` — prose supporting docs, loaded on-demand.
+- `assets/` — non-executable templates/configs the agent copies or hands to the
+  user (a `.env.sample`, a Dockerfile, a compose file, a sample spec). Not a
+  script itself, even if a script in the same skill reads it —
+  `tapestry-local-dev-environment`'s `setup.sh` lives in `scripts/`, but the
+  `.env.sample`/`docker-compose.minio.yml`/`Dockerfile.client-minio` it reads
+  live in `assets/`, since none of them are code that runs.
+
+For anything landing in `scripts/`:
+
 - Follow `.claude/guidelines/script-audit-guidelines.md`: zero-argument handling,
   `-h`/`--help`, `set -euo pipefail`, no bash 4+ features, errors to stderr.
 - **Run it for real before calling it done — don't just read it and reason about

@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["tapestry-project", "tapestries", "local dev", "run tapestry locally", "npm run local", "docker-compose.local.yml"]
   - keywords: ["LocalStack", "Vault dev", "vite dev server", "server/.env", "client/.env"]
   - keywords: ["MinIO installer", "setup.sh", "CSP", "Content-Security-Policy", "connect-src"]
-last_verified: 2026-08-12
+last_verified: 2026-08-19
 ---
 
 Run Tapestries locally. **`asteasolutions/tapestry-project` (`main`) is the definitive
@@ -142,9 +142,11 @@ root `.env.sample`/`.env` (instead of per-workspace `server/.env`/`client/.env`)
 of LocalStack, and building the client into an nginx image instead of running
 Vite dev server. If you have these files, they are **not part of
 `asteasolutions/tapestry-project`** — they're a specific fork's addition. This
-skill bundles copies under `scripts/` if you need them: `setup.sh` is
-interactive (`./setup.sh` or `./setup.sh --no-start`), regenerates missing
-secrets, and idempotently re-runs against an existing `.env`.
+skill bundles copies if you need them: `scripts/setup.sh` is interactive
+(`./setup.sh` or `./setup.sh --no-start`), regenerates missing secrets, and
+idempotently re-runs against an existing `.env`; the config templates it reads
+(`.env.sample`, `docker-compose.minio.yml`, `Dockerfile.client-minio`) live
+under `assets/` since they aren't executable scripts themselves.
 
 **Separately**, some forks layer archive.org-specific production
 customizations on top of that (e.g. `archive-version`/`archive-version-updated`
@@ -209,11 +211,11 @@ Hard-refresh the browser afterward — the old bundle may be cached.
    fork's customized archive.org branch), see `tapestry-production-deployment`
    — that skill is explicitly about a customization, not upstream.
 
-## Bundled scripts (fork-variation installer, not upstream)
+## Bundled scripts and assets (fork-variation installer, not upstream)
 
 | File | Purpose |
 |---|---|
 | `scripts/setup.sh` | Interactive installer for the Docker+MinIO variation: generates `.env` from `.env.sample`, builds, starts, and health-checks the stack |
-| `scripts/.env.sample` | The secret-free template `setup.sh` reads (every credential blank) |
-| `scripts/docker-compose.minio.yml` | The MinIO-backed local Compose stack (client/server/worker/db/redis/vault/minio/mc) |
-| `scripts/Dockerfile.client-minio` | Client image build used by the above compose file |
+| `assets/.env.sample` | The secret-free template `setup.sh` reads (every credential blank) |
+| `assets/docker-compose.minio.yml` | The MinIO-backed local Compose stack (client/server/worker/db/redis/vault/minio/mc) |
+| `assets/Dockerfile.client-minio` | Client image build used by the above compose file |
