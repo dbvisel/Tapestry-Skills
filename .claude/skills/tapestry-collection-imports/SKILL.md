@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["import picker", "HandleIAImportDialog", "IAImport", "collection import", "bulk import"]
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
   - keywords: ["import-items-list", "LazyList", "MAX_SELECTION"]
-last_verified: 2026-08-18
+last_verified: 2026-08-20
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -32,12 +32,15 @@ extensions of exactly this kind:
 - **Openverse tag collections** — `https://openverse.org/image/collection?tag=Aztec` — same
   status as Commons: fork-only reference, not upstream.
 - **Internet Archive search queries** — `https://archive.org/search?query=subject%3A%22Gondavalekar%22`
-  — **this one is no longer just a reference implementation.** As of 2026-08-18 it's been
-  built as a real `IASearchCollection` addition against actual upstream and opened as a PR;
-  check whether it has since merged before treating it as still-missing. It's the source of
-  the gotchas below, since it was the first case where the *new* collection type had no
-  single representative IA item (a category/playlist resolves to one IA item's metadata
-  first; a raw search query never does).
+  — **this one is no longer just a reference implementation.** As of 2026-08-18 it was built
+  as a real `IASearchCollection` addition against actual upstream and opened as a PR
+  ([asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)).
+  As of 2026-08-20 **it received real review feedback requesting changes, not yet merged** —
+  see "Real PR review feedback" below for exactly what a reviewer asked for; treat those as
+  corrections to how this skill described the implementation, not just history. It's the
+  source of most of the gotchas below, since it was the first case where the *new* collection
+  type had no single representative IA item (a category/playlist resolves to one IA item's
+  metadata first; a raw search query never does).
 
 **So as of 2026-08-18, only `IACollection` (a literal IA collection/identifier),
 `IAPlaylist`, and (pending merge) `IASearchCollection` exist upstream** — Commons categories
@@ -140,15 +143,25 @@ the picker UI.
    - The component itself: wrap `<LazyList windowSize={...} requestItems={...} renderItem={...} />`,
      render each item as a `<Checkbox>` (thumbnail + label if available), disable it once
      `selectedItems.length >= MAX_SELECTION`, and include a `<SelectAll>` control wired to
-     the dialog's `onToggleAll` prop. Copy an existing sibling as the starting point — the
-     shape is intentionally near-identical across all of them. Real, already-upstream
-     siblings exist for this now: `collection-list/` (`IACollection`) and, pending merge,
-     `search-list/` (`IASearchCollection`); fork-only reference work also has
-     `commons-category-list/`. If the new type's rendered fields genuinely match a sibling's
-     (both draw from the same underlying search API, say), importing that sibling's
-     `styles.module.css` directly — rather than duplicating it into the new component's own
-     folder — keeps the diff smaller for identical visuals; `search-list/` did this against
-     `collection-list/styles.module.css` rather than copying it.
+     the dialog's `onToggleAll` prop.
+     **Prefer parameterizing an existing sibling over copying it, when the underlying query
+     is genuinely "the same list, different filter."** An earlier draft of this skill
+     recommended copying a sibling as scaffolding and only sharing its `styles.module.css` if
+     the fields matched — that's exactly what `IASearchCollection`'s first draft did
+     (`search-list/` as a near-total copy of `collection-list/`, differing only in what string
+     got passed as `q`), and a real reviewer rejected it on sight: "This looks like an almost
+     complete copy of IACollectionList. Why don't we just remove IACollectionList and rename
+     this to IASearchList instead. Then for collection we should just pass the query
+     `collection:${collectionId}`\[,\] and the appropriate placeholder." The generalizable
+     lesson: **if a new collection type's list differs from an existing one only in the raw
+     query string handed to the same underlying search API, don't create a sibling
+     component at all — parameterize the existing one by that raw query string**, expressing
+     the old type as a special case of the new, more general shape (a "collection" is just
+     `collection:<id>` plus the always-required `AND NOT mediatype:collection` exclusion
+     below), and delete the now-redundant component. Reserve an actual separate sibling
+     component for cases that truly need a different data shape or a different underlying API
+     (Commons' `commons-category-list/` legitimately differs this way — it's not just a
+     different query string against the same search endpoint).
 7. **`client/src/components/handle-ia-import-dialog/import-details/index.tsx`** — add a
    branch showing the collection's name/id, its `total` count, and a "View on \<platform\>"
    link back to the original collection page. Also a plain `if` chain.
@@ -191,6 +204,55 @@ the picker UI.
   every case — it only fires when the new member's shape is a strict subset of what existing
   code destructures.
 
+## Real PR review feedback (2026-08-20)
+
+[asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+(the `IASearchCollection` PR this skill is partly built from) got a real review, not yet
+merged as of this writing. Every comment generalizes beyond IA search specifically —
+folded in here as corrections, not just a status update:
+
+- **Don't accept a near-duplicate sibling component, even as an intermediate step** — see
+  the rewritten step 6 above. The reviewer's fix was to delete the duplicate and
+  parameterize the survivor by a raw query string, with the old type expressed as a special
+  case of the new one (`collection:${collectionId}` plus the exclusion below). If you catch
+  yourself about to `cp` a sibling list component and change only the query-builder
+  function, stop and parameterize instead — a reviewer will very likely ask for exactly this,
+  so doing it upfront saves a review round-trip.
+- **Always exclude collections from collection/search results**: `AND NOT
+  mediatype:collection` on every IA query this skill's pattern builds, not just the literal
+  `IACollection` case. It's easy to add this once (in the original `IACollection` query) and
+  forget it when a sibling/generalized query is introduced later — the reviewer caught it
+  missing from *both* the new list's query and the cheap count-probe query (`total` would
+  otherwise count collection-type results that can never actually appear in the list,
+  understating what's importable versus what the header claims). If you consolidate per the
+  point above, this exclusion only needs to live in one place instead of two.
+- **Merge same-platform factories that both just recognize a URL shape into one factory**,
+  rather than registering several separate top-level entries in `ITEM_FACTORIES` for the
+  same platform. The reviewer asked for exactly this ("Can we use one IA factory which
+  handles all IA logic?") after `IASearchCollection` added a second, entirely separate
+  factory (`iaSearchCollectionFactory`) alongside the existing `iaCollectionFactory` — check
+  each new URL shape inside one combined factory function instead (try the more specific
+  parse first, fall through to the next), and register only that one function.
+- **Prefer returning the plain value over a single-field wrapper object** from a
+  parse-URL-and-extract helper, and name the function after exactly what it returns. The
+  reviewer's concrete suggestion: `parseIASearchURL(source): { query: string } | null` should
+  just be `parseIASearchURLQuery(source): string | null` — there was only ever one field, so
+  the wrapper object added a destructuring step at every call site for no benefit. This
+  applies to any new `parse<X>...URL` helper this skill's checklist has you write: only wrap
+  the return value in an object if there's genuinely more than one field to carry, or if
+  callers need to distinguish "matched, but a field was empty" from "didn't match" (a bare
+  `string | null` return conflates an empty-but-present value with no-match, which a `{
+  query: string } | null` shape currently in the codebase this skill was built from avoids -
+  weigh that against the reviewer's simplification if it matters for your platform).
+- **The "cheap count probe is unavoidably a full search request" tradeoff got explicit
+  reviewer sign-off**, not just this skill's own assumption: "this request might be a bit
+  slow, but there is no other way to tell if the search result returns any items." That's
+  independent confirmation of the "Distinguish a cheap 'how many' probe from the expensive
+  full listing" gotcha above for IA specifically (Solr-backed `advancedsearch.php` always
+  reports `numFound`, so `pageSize: 1` genuinely is the cheapest possible probe there) — no
+  action needed, just don't second-guess this particular tradeoff if asked to optimize it
+  further for IA.
+
 ## Design consideration: import-by-reference vs. a real copy
 
 **Every reference implementation here — both this skill's collection types and
@@ -225,9 +287,14 @@ hypothetical, failure mode.
 2. **Verify all four integration points**, not just the two that are type-checked (see the
    gotchas above).
 3. **Don't add a per-type selection cap** — `MAX_SELECTION` is shared.
-4. **Surface the by-reference-vs-copy question explicitly** before assuming either is
+4. **Parameterize an existing sibling list component rather than copying it**, when the only
+   real difference is the query string handed to the same underlying search API — see "Real
+   PR review feedback" above. Always exclude collection-type results (`AND NOT
+   mediatype:collection` for IA) everywhere that query gets built, including the cheap count
+   probe.
+5. **Surface the by-reference-vs-copy question explicitly** before assuming either is
    correct for a new source.
-5. See `tapestry-external-media-sources` for the single-item version of this pattern (and
+6. See `tapestry-external-media-sources` for the single-item version of this pattern (and
    the resolver conventions this skill's `core/` additions should follow), and
    `tapestry-server-worker` for the S3 upload flow relevant to the "real copy" alternative
    above.
