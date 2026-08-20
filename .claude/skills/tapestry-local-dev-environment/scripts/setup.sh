@@ -283,6 +283,14 @@ hdr "Writing $ENV_FILE"
 # already the target file we edit it in place.
 [ "$SOURCE" = "$ENV_FILE" ] || cp "$SOURCE" "$ENV_FILE"
 
+# Not a runtime value the app itself reads - this is for admin tooling (e.g. the
+# tapestry-visibility / tapestry-frame-thumbnails skills' manage-*.sh scripts),
+# which need to know where docker-compose.minio.yml / this .env live when they're
+# run from somewhere else (their own scripts/ directory, say). setup.sh always
+# lives at the repo root (see the "locate ourselves" line at the top), so
+# $SCRIPT_DIR is the repo directory.
+set_env REPO_DIR              "$SCRIPT_DIR"
+
 # runtime (server / worker) values
 set_env HOST                  "$HOST"
 set_env VIEWER_URL            "$VIEWER_URL"
@@ -318,6 +326,7 @@ set_env VAULT_ADDR               "http://vault:8200"
 set_env VITE_API_URL              "$VITE_API_URL"
 
 ok "Wrote $ENV_FILE"
+info "  Repo dir ........ $SCRIPT_DIR"
 info "  Host ............ $HOST"
 info "  Client URL ...... $VIEWER_URL"
 info "  API URL ......... $EXTERNAL_SERVER_URL"

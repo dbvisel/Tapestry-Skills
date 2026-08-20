@@ -34,12 +34,17 @@ one of three values, defaulting to `private`:
 
 ## Using the script
 
-Run from the repo directory on the server, with the stack up:
+Run with the repo directory as `REPO_DIR` (defaults to the current directory -
+i.e. run it from the repo directory itself, unless you point elsewhere). The
+script file can live anywhere, e.g. a dedicated `scripts/` directory one level
+below the repo (same convention as the sibling `tapestry-frame-thumbnails`,
+`tapestry-thumbnail`, and `tapestry-backups` skills):
 
 ```bash
-./manage-tapestry-visibility.sh            # list everything, then pick one
-./manage-tapestry-visibility.sh <search>   # filter by title / slug / owner email
-./manage-tapestry-visibility.sh --help     # show usage
+cd my-tapestry-repo/scripts
+REPO_DIR=.. ./manage-tapestry-visibility.sh            # list everything, then pick one
+REPO_DIR=.. ./manage-tapestry-visibility.sh <search>   # filter by title / slug / owner email
+./manage-tapestry-visibility.sh --help                 # show usage
 ```
 
 It lists matching tapestries in a numbered table (title, owner, slug, current
@@ -58,6 +63,7 @@ Overridable via environment variables (defaults shown, matching a production
 deployment's `docker-compose-fnf.yml` setup):
 
 ```bash
+REPO_DIR=.
 COMPOSE_FILE=docker-compose-fnf.yml
 ENV_FILE=.env
 DB_SERVICE=db   DB_USER=tapestries   DB_NAME=tapestries
@@ -91,9 +97,10 @@ wrong row by id when several tapestries share a similar title.
    anyone on the installation." Confirm that's actually intended before setting it,
    especially when a search-by-title match is ambiguous (the picker shows
    owner + slug + id specifically so you're not guessing from title alone).
-3. **Always run from the repo directory on the server**, with the stack up —
-   the script's preflight check fails fast with a clear message if the database
-   isn't reachable, rather than doing something confusing.
+3. **`REPO_DIR` must actually be the repo directory** (where
+   `docker-compose-fnf.yml` / `.env` live) - the script's preflight check fails
+   fast with a clear message (including the resolved path it tried) if the
+   database isn't reachable, rather than doing something confusing.
 4. **Restoring a tapestry's visibility isn't automatic** — the script doesn't track
    history, so note the "current visibility" it prints before changing anything if
    you might need to revert.

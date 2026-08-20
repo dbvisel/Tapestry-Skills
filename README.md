@@ -16,6 +16,29 @@ doesn't yet justify.
 
 ## Skills
 
+Grouped below by what they're *for*, not by any physical folder structure —
+every skill still lives as a direct child of `.claude/skills/` (flat), which
+both `tools/verify-skills.py` and skill discovery itself expect. These
+groupings are just how this README presents them; nothing here reflects a
+directory layout.
+
+### Admin & maintenance (operating an already-running installation)
+
+| Skill | Covers |
+|---|---|
+| [`tapestry-visibility`](.claude/skills/tapestry-visibility/SKILL.md) | Managing a tapestry's visibility (private/link/public) on a running installation via the bundled `manage-tapestry-visibility.sh` script, including how "public" surfaces it in every client's "Samples" list |
+| [`tapestry-backups`](.claude/skills/tapestry-backups/SKILL.md) | Backing up a Tapestry installation's Postgres database and MinIO object storage via the bundled `backup-tapestry.sh` script (interactive or scheduled), plus how to restore |
+| [`tapestry-thumbnail`](.claude/skills/tapestry-thumbnail/SKILL.md) | Remaking a tapestry's own single card thumbnail (`Tapestry.thumbnail` — the dashboard/Samples preview) via the bundled `manage-tapestry-thumbnail.sh` script. Not per-frame thumbnails — see the next entry for that |
+| [`tapestry-frame-thumbnails`](.claude/skills/tapestry-frame-thumbnails/SKILL.md) | Inspecting and backfilling missing per-frame thumbnails (the small preview image on each canvas item) via the bundled `manage-tapestry-frame-thumbnails.sh` script — the fix for tapestries imported before a given install picked up the "generate thumbnails on import" server fix |
+
+These four share a convention: each bundled `manage-*.sh`/`backup-tapestry.sh`
+script resolves the actual repo/compose-file location via a `REPO_DIR`
+environment variable (default: the current directory), so the script file
+itself can live anywhere — e.g. a dedicated admin `scripts/` directory,
+separate from the `tapestry-project` checkout it operates on.
+
+### Local development (building/running the app itself)
+
 | Skill | Covers |
 |---|---|
 | [`tapestry-local-dev-environment`](.claude/skills/tapestry-local-dev-environment/SKILL.md) | Running the app locally the way upstream documents it (npm workspaces, per-workspace `.env` files, LocalStack/Redis/Vault via `docker-compose.local.yml`, Vite dev server) — plus a clearly-separated note on a Docker+MinIO installer variation that exists only on some forks, and the CSP issue that only shows up there |
@@ -27,11 +50,14 @@ doesn't yet justify.
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from three real (unmerged) reference implementations of that extension |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
-| [`tapestry-visibility`](.claude/skills/tapestry-visibility/SKILL.md) | Managing a tapestry's visibility (private/link/public) on a running installation via the bundled `manage-tapestry-visibility.sh` script, including how "public" surfaces it in every client's "Samples" list |
-| [`tapestry-backups`](.claude/skills/tapestry-backups/SKILL.md) | Backing up a Tapestry installation's Postgres database and MinIO object storage via the bundled `backup-tapestry.sh` script (interactive or scheduled), plus how to restore |
+| [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
+
+### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
+
+| Skill | Covers |
+|---|---|
 | [`tapestry-zip-authoring`](.claude/skills/tapestry-zip-authoring/SKILL.md) | Constructing a valid tapestry export/import `.zip` from scratch — the full `root.json` schema and file-naming convention, plus a bundled, dependency-free builder script. **Does not require a `tapestry-project` checkout** — verified directly against the real app's schema/import behavior rather than derived from reading its source |
 | [`tapestry-zip-analysis`](.claude/skills/tapestry-zip-analysis/SKILL.md) | Analyzing an existing tapestry `.zip` — version, item inventory, groups/rels/presentation structure, and whether it's actually importable — via a bundled, dependency-free analyzer script. **Does not require a `tapestry-project` checkout**; depends on `tapestry-zip-authoring` for the schema reference, not on the app's source |
-| [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
 
 ## Using these skills
 

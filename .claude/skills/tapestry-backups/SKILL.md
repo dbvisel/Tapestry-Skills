@@ -49,7 +49,9 @@ to be safe both run by hand and run unattended on a schedule.
 
 ```bash
 ./backup-tapestry.sh                                              # run from the project dir, defaults for everything
-./backup-tapestry.sh --project-dir ~/tapestries/tapestry-project  # run from elsewhere
+REPO_DIR=~/tapestries/tapestry-project ./backup-tapestry.sh       # run from elsewhere (same convention as
+                                                                   # tapestry-frame-thumbnails/tapestry-thumbnail)
+./backup-tapestry.sh --project-dir ~/tapestries/tapestry-project  # equivalent --flag form
 ./backup-tapestry.sh --keep 30 --backup-dir /mnt/backups/tapestry # more history, different location
 COMPOSE_FILE=docker-compose-fnf.yml ./backup-tapestry.sh          # non-default compose filename
 ```
@@ -58,10 +60,13 @@ Defaults are generic (`docker-compose.yml`, `db`, `minio`, `.env` for
 `DB_NAME`/`DB_USER`) — **don't assume they match any given install**, since the
 compose filename in particular varies a lot (`docker-compose.local.yml`,
 `docker-compose-fnf.yml`, `docker-compose.minio.yml`, ...). Override via
-environment variables (`COMPOSE_FILE`, `ENV_FILE`, `DB_SERVICE`, `MINIO_SERVICE`,
-`BACKUP_DIR`, `KEEP`) or the matching flags — same pattern as
-`tapestry-visibility`'s `manage-tapestry-visibility.sh`. `--help` prints the full
-option list.
+environment variables (`REPO_DIR`, `COMPOSE_FILE`, `ENV_FILE`, `DB_SERVICE`,
+`MINIO_SERVICE`, `BACKUP_DIR`, `KEEP`) or the matching flags (`--project-dir` is
+`REPO_DIR`'s flag form) - same convention the sibling `tapestry-visibility`,
+`tapestry-frame-thumbnails`, and `tapestry-thumbnail` skills use, so this
+script's own location can be anywhere (e.g. a shared admin `scripts/`
+directory) independent of where the actual project checkout lives. `--help`
+prints the full option list.
 
 Backups default to `~/tapestry-backups` — deliberately *outside* the project
 checkout, so they don't show up as untracked clutter in `git status` and don't

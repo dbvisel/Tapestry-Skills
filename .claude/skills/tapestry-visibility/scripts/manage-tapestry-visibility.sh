@@ -7,7 +7,15 @@
 # "Samples" list every client sees on startup. Default visibility is private.
 #
 # Runs against the Postgres "db" service via `docker compose exec` (the same way
-# you'd reach it by hand). Run it from the repo directory on the server.
+# you'd reach it by hand). Run it with the repo directory as REPO_DIR (default:
+# the current directory - i.e. run it from the repo directory itself, unless
+# you point REPO_DIR elsewhere). The script file itself can live anywhere, e.g.
+# a dedicated scripts/ directory one level below the repo (same convention as
+# the sibling tapestry-frame-thumbnails, tapestry-thumbnail, and
+# tapestry-backups skills):
+#
+#   cd my-tapestry-repo/scripts
+#   REPO_DIR=.. ./manage-tapestry-visibility.sh wikimania
 #
 # Usage:
 #   ./manage-tapestry-visibility.sh            # list everything, then pick one
@@ -15,6 +23,7 @@
 #   ./manage-tapestry-visibility.sh --help     # show this help
 #
 # Overridable via environment variables (defaults shown):
+#   REPO_DIR=.
 #   COMPOSE_FILE=docker-compose-fnf.yml
 #   ENV_FILE=.env
 #   DB_SERVICE=db   DB_USER=tapestries   DB_NAME=tapestries
@@ -26,8 +35,11 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   exit 0
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Where docker-compose-fnf.yml / .env live. Defaults to the current directory,
+# matching "run this from the repo directory" - override (or cd elsewhere and
+# set this) if the script itself lives somewhere else, e.g. a repo's scripts/.
+REPO_DIR="${REPO_DIR:-.}"
+cd "$REPO_DIR"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose-fnf.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
@@ -60,7 +72,7 @@ psql_exec() {
 if ! psql_exec -tAc 'SELECT 1;' >/dev/null 2>&1; then
   err "Could not connect to the database via:"
   err "  ${COMPOSE[*]} exec $DB_SERVICE psql -U $DB_USER -d $DB_NAME"
-  err "Is the stack running, and are you in the repo directory?"
+  err "Is the stack running, and is REPO_DIR ('${REPO_DIR}', resolved to '$(pwd)') the repo directory?"
   exit 1
 fi
 

@@ -7,8 +7,14 @@
 # Exits non-zero on any real failure so a scheduler can detect and alert on it.
 #
 # Runs against the Postgres/MinIO services via `docker compose exec`/`docker
-# inspect` (the same way you'd reach them by hand). Run it from the project
-# directory on the server, or pass --project-dir.
+# inspect` (the same way you'd reach them by hand). Run it with the project
+# directory as REPO_DIR (default: the current directory), or pass
+# --project-dir - same convention as the sibling tapestry-frame-thumbnails and
+# tapestry-thumbnail skills, so this script's own location can be anywhere,
+# e.g. a repo's own scripts/ directory:
+#
+#   cd my-tapestry-repo/scripts
+#   REPO_DIR=.. ./backup-tapestry.sh
 #
 # Usage:
 #   ./backup-tapestry.sh [options]
@@ -17,13 +23,14 @@
 # (docker-compose.yml, docker-compose.local.yml, docker-compose-fnf.yml,
 # docker-compose.minio.yml, ...), so don't assume the default filename matches
 # yours; set COMPOSE_FILE explicitly if it doesn't:
+#   REPO_DIR=.
 #   COMPOSE_FILE=docker-compose.yml
 #   ENV_FILE=.env
 #   DB_SERVICE=db   MINIO_SERVICE=minio
 #   BACKUP_DIR=~/tapestry-backups   KEEP=14
 #
 # Options:
-#   --project-dir DIR    Directory to run docker compose from (default: cwd)
+#   --project-dir DIR    Same as setting REPO_DIR (default: $REPO_DIR or cwd)
 #   --compose-file FILE  Same as setting COMPOSE_FILE
 #   --env-file FILE      Same as setting ENV_FILE
 #   --db-service NAME    Same as setting DB_SERVICE
@@ -51,7 +58,7 @@ ok()    { printf '[%s] %s%s%s\n' "$(ts)" "$GREEN" "$*" "$RESET"; }
 err()   { printf '[%s] %s%s%s\n' "$(ts)" "$RED" "$*" "$RESET" >&2; }
 
 # --- defaults, overridable via env vars or flags (flags win) -------------------
-PROJECT_DIR="."
+PROJECT_DIR="${REPO_DIR:-.}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 DB_SERVICE="${DB_SERVICE:-db}"
@@ -99,7 +106,7 @@ DB_USER="$(get_env DB_USER "$ENV_FILE")"; DB_USER="${DB_USER:-tapestries}"
 if ! "${COMPOSE[@]}" exec -T "$DB_SERVICE" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
   err "Could not reach Postgres via:"
   err "  ${COMPOSE[*]} exec $DB_SERVICE pg_isready -U $DB_USER -d $DB_NAME"
-  err "Is the stack running, and are you in the project directory (or did you pass --project-dir)?"
+  err "Is the stack running, and is REPO_DIR ('${REPO_DIR:-.}', resolved to '$(pwd)') the project directory?"
   exit 1
 fi
 
