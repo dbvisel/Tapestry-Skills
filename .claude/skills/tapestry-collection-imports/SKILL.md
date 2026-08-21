@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["import picker", "HandleIAImportDialog", "IAImport", "collection import", "bulk import"]
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
   - keywords: ["import-items-list", "LazyList", "MAX_SELECTION"]
-last_verified: 2026-08-20
+last_verified: 2026-08-21
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -35,12 +35,13 @@ extensions of exactly this kind:
   — **this one is no longer just a reference implementation.** As of 2026-08-18 it was built
   as a real `IASearchCollection` addition against actual upstream and opened as a PR
   ([asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)).
-  As of 2026-08-20 **it received real review feedback requesting changes, not yet merged** —
-  see "Real PR review feedback" below for exactly what a reviewer asked for; treat those as
-  corrections to how this skill described the implementation, not just history. It's the
-  source of most of the gotchas below, since it was the first case where the *new* collection
-  type had no single representative IA item (a category/playlist resolves to one IA item's
-  metadata first; a raw search query never does).
+  As of 2026-08-21 **it's been through two real review rounds (2026-08-20, 2026-08-21),
+  both fully addressed and resolved, still open/unmerged** — see "Real PR review feedback"
+  below for exactly what each reviewer round asked for; treat those as corrections to how
+  this skill described the implementation, not just history. It's the source of most of
+  the gotchas below, since it was the first case where the *new* collection type had no
+  single representative IA item (a category/playlist resolves to one IA item's metadata
+  first; a raw search query never does).
 
 **So as of 2026-08-18, only `IACollection` (a literal IA collection/identifier),
 `IAPlaylist`, and (pending merge) `IASearchCollection` exist upstream** — Commons categories
@@ -68,7 +69,12 @@ the picker UI.
    - `parse<X>CollectionURL(url)`: recognize the collection URL shape, extract its
      identifier (a category title, a tag, a query string). Same defensive-parsing
      conventions as the single-item case: `try`/`catch` around `new URL(url)`, return `null`
-     for anything unrecognized.
+     for anything unrecognized. If the source URL can carry *other* query params that
+     narrow the collection (IA search's real `parseIASearchURLQuery` also reads `tab=` —
+     the media-type filter tab a user had open on archive.org — and folds a matching
+     `mediatype:` clause into the returned query string), check each such param actually
+     does what it looks like before wiring it in — see "Real PR review feedback" below;
+     not every value that looks like a type filter is one.
    - **A cheap, count-only fetch**, separate from the full member-listing fetch:
      `fetch<X>CollectionCount(id)`. Commons' `fetchCommonsCategoryFileCount` hits a
      lightweight `categoryinfo` endpoint (no thumbnails, no per-file lookups) specifically so
@@ -204,12 +210,13 @@ the picker UI.
   every case — it only fires when the new member's shape is a strict subset of what existing
   code destructures.
 
-## Real PR review feedback (2026-08-20)
+## Real PR review feedback (2026-08-20 and 2026-08-21)
 
 [asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)
-(the `IASearchCollection` PR this skill is partly built from) got a real review, not yet
-merged as of this writing. Every comment generalizes beyond IA search specifically —
-folded in here as corrections, not just a status update:
+(the `IASearchCollection` PR this skill is partly built from) has now been through two real
+review rounds, not yet merged as of this writing. Every comment generalizes beyond IA search
+specifically — folded in here as corrections, not just a status update. First round
+(2026-08-20):
 
 - **Don't accept a near-duplicate sibling component, even as an intermediate step** — see
   the rewritten step 6 above. The reviewer's fix was to delete the duplicate and
@@ -253,6 +260,48 @@ folded in here as corrections, not just a status update:
   action needed, just don't second-guess this particular tradeoff if asked to optimize it
   further for IA.
 
+Second round (2026-08-21), after round 1's fixes landed:
+
+- **A helper must not reach into another helper to transform its own argument — do that at
+  the call site.** `fetchIASearchCount` had grown to call `excludeIACollections(query)`
+  internally before searching. The reviewer's exact words: "`fetchIASearchCount` should not
+  depend on `excludeIACollections`, rather we should modify the argument before it is
+  passed." Fixed by having `fetchIASearchCount` take the query as-is, and its one call site
+  apply `excludeIACollections` explicitly before calling it. The generalizable lesson: when
+  one function's *purpose* is generic (searching, in this case) and another encodes a
+  *policy* specific to one caller's needs (excluding collections, which only this feature
+  cares about), keep them composable and separate — don't let the generic function silently
+  bake in a caller-specific policy. Apply the same scrutiny to any helper this skill's
+  checklist has you write that calls another of its own siblings internally.
+- **Comment discipline at this upstream is stricter than "explain the non-obvious why" —
+  it's "core logic and complex math only," full stop.** Three comments were removed on
+  request in this round alone, and one of them was exactly the kind of "hidden constraint"
+  comment that's normally the right call (explaining *why* `excludeIACollections` exists at
+  all — because a collection is itself a search result but never an importable item). The
+  reviewer's words, twice: "We put comments only on core logic and complex math, we don't
+  need a comment here" / "This comment is also not necessary." Don't assume a well-reasoned
+  "why" comment is safe here just because it clears the general "non-obvious constraint" bar
+  — if the surrounding code isn't itself core logic or complex math, expect it removed, and
+  consider leaving out speculative explanatory comments on first submission to this upstream
+  rather than having them flagged.
+- **Reviewers verify against the live external product, not just the diff — and you can
+  get ahead of it by doing the same before you're asked.** A reviewer noticed archive.org's
+  own search UI has a `tab` URL parameter (filters results to one media type — Books, Video,
+  Audio, etc.) purely by using the real site, and asked whether this skill's URL parser
+  should honor it. Answering this required the same kind of live verification this skill set
+  already values elsewhere: which tab produces which `tab=` value (checked against the real
+  site with a headless browser, since the values aren't documented — `tab=movies`,
+  `tab=etree`, `tab=texts`, etc.), and whether the resulting `mediatype:` constraint actually
+  works against the specific API this code calls (confirmed against a live
+  `advancedsearch.php` request, not assumed from the tab value alone). The gotcha this
+  surfaced: not every tab corresponds to a real `mediatype:` value — `tab=radio`/`tab=tv`
+  aren't part of the media-type facet at all, `tab=fulltext` ("Text Contents") is a
+  search-mode toggle rather than a type filter, and `tab=collection` *is* a real value but
+  must still be rejected, since honoring it would AND against this skill's own mandatory
+  `NOT mediatype:collection` exclusion and silently return zero results every time. Don't
+  assume a facet value that's visible in a URL is safe to pass through unconditionally —
+  verify each one actually does what its label implies before wiring it in.
+
 ## Design consideration: import-by-reference vs. a real copy
 
 **Every reference implementation here — both this skill's collection types and
@@ -294,7 +343,18 @@ hypothetical, failure mode.
    probe.
 5. **Surface the by-reference-vs-copy question explicitly** before assuming either is
    correct for a new source.
-6. See `tapestry-external-media-sources` for the single-item version of this pattern (and
+6. **Don't let a generic helper silently bake in a caller-specific policy** — if only one
+   caller needs a transformation (excluding collections, say), apply it at that call site,
+   not inside the generic helper it calls. See "Real PR review feedback" (2026-08-21) above.
+7. **Expect comments to be removed even when they explain a genuinely non-obvious "why"** —
+   this upstream's bar is "core logic or complex math," not "non-obvious constraint." Lean
+   toward no comment on a first submission here unless the surrounding code is itself
+   complex.
+8. **Verify a new URL parameter actually means what it looks like before honoring it** — not
+   every value visible in a real URL corresponds to the API constraint its label implies
+   (see the `tab=` gotcha above). Check against the real service, not just the URL shape.
+9. See `tapestry-external-media-sources` for the single-item version of this pattern (and
    the resolver conventions this skill's `core/` additions should follow), and
    `tapestry-server-worker` for the S3 upload flow relevant to the "real copy" alternative
-   above.
+   above. See `tapestry-pr-conventions` for the review norms observed on this PR that
+   generalize well beyond collection imports specifically.

@@ -48,9 +48,10 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
-| [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from three real (unmerged) reference implementations of that extension |
+| [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
+| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer across two real review rounds on PR #96 — comment discipline, merge-don't-duplicate, composition over internal dependency — plus the exact `gh`/GraphQL commands for replying to and resolving PR review comments |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -172,3 +173,16 @@ during review, in case future editors hit the same trap:
   tapestry rendered in ~5s over loopback, showing the actual bottleneck for large tapestries is
   the viewer's lack of streaming/range-request support on download, not the zip format or
   client-side decompression.
+- `tapestry-collection-imports`' IA-search example became a real PR
+  ([#96](https://github.com/asteasolutions/tapestry-project/pull/96)) that then got real
+  review — twice — and the review feedback changed the skill's own recommended architecture,
+  not just its wording. Round 1 rejected the checklist's original "copy a sibling component,
+  share styles if the fields match" advice on sight (a near-duplicate `search-list/` next to
+  `collection-list/`) in favor of merging both into one parameterized component and one
+  parameterized factory; round 2 caught a helper reaching into another helper to modify its
+  own argument (should compose at the call site instead) and rejected two comments that would
+  pass this skill set's own general "explain the non-obvious why" bar — this specific
+  upstream's comment discipline turned out to be narrower ("core logic and complex math
+  only"). Both rounds' feedback was generalized out into a new skill,
+  `tapestry-pr-conventions`, rather than left buried in one skill's history — real, verified
+  signal from the actual gatekeeper who reviews PRs here, not invented best practice.
