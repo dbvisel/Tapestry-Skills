@@ -45,7 +45,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
-| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models |
+| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models — plus a variation for an *existing* type accepting a format that needs server-side conversion before it's renderable (real reference: HEIC image import) |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
@@ -206,3 +206,21 @@ during review, in case future editors hit the same trap:
   never exercised against the real running app, isn't verified just because it looks
   reasonable — the same standard this repo already applies to bundled scripts ("run it for
   real before calling it done") applies to config templates too.
+- `tapestry-content-types` gained a variation section from the same HEIC image-import
+  session, but built from a genuinely different kind of case than IIIF/`model3d`: it adds
+  **no new item type at all** — the existing `image` type accepts a format (HEIC) the
+  browser can't render, and needs a background conversion step instead. Real, concrete
+  bugs surfaced along the way were generalized directly into guardrails rather than left
+  as one-off war stories: an item-size computation that assumed decode always succeeds (it
+  doesn't, for a format the browser can't handle at all — not the same as `model3d`'s "no
+  natural aspect ratio" case); a broken-image flash traced to *two* distinct "not ready
+  yet" windows for any media item (a local optimistic `blob:` URL during upload, then a
+  real-but-unconverted URL after), each needing a different signal to detect; and a
+  format-detection helper that worked on a bare S3 key but silently broke against a
+  presigned URL with a query string appended, because it split on the last `.` in the
+  whole string. Considered splitting this into its own skill; decided against it for now
+  (asked the user directly) since it's small, its main value is redirecting someone away
+  from the full new-item-type checklist at the point they'd otherwise reach for it, and
+  there's only one real example so far — matching this repo's own pattern of splitting
+  only once something's proven to generalize across more than one real case (see
+  `tapestry-pr-conventions` above).

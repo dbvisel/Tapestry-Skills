@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one
+description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format that needs server-side conversion before it's renderable (real reference: HEIC image import)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,7 +8,8 @@ skill_discovery_hints:
   - keywords: ["add item type", "new content type", "canvas item type", "MediaItemSchema", "ItemType"]
   - keywords: ["IIIF", "deep zoom", "OpenSeadragon", "export version", "ExportV8"]
   - keywords: ["item factory", "itemSizes", "TapestryComponentsConfig", "thumbnail generator"]
-last_verified: 2026-08-12
+  - keywords: ["HEIC", "unsupported format", "background conversion", "placeholder while converting", "broken image icon"]
+last_verified: 2026-09-01
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -30,6 +31,13 @@ for adding a *new* type. The two examples are complementary: IIIF needed real as
 resolution logic and a dedicated item factory; `model3d` needed neither, and instead
 surfaces a lighter, more common path (reusing the existing simple-file-matching factory)
 that IIIF alone would have made this skill overstate as always-necessary.
+
+A third, different kind of reference sits at the end of this skill (see "A variation:
+an existing type that needs server-side conversion before it's usable") — HEIC image
+import on this same fork, built and verified end-to-end against the real running app
+(not yet opened as a PR as of this writing). Unlike IIIF/`model3d`, it adds **no new
+item type at all** — it's what to do when an *existing* type accepts a format the
+browser can't render directly.
 
 ## When to use this skill
 
@@ -237,6 +245,59 @@ lowercase-`type`/PascalCase-class convention exactly.
     setup (API keys, registration, format quirks) — same reasoning as the docs step in
     `tapestry-auth-providers`.
 
+## A variation: an existing type that needs server-side conversion before it's usable
+
+Not every new "format" needs a new item type. HEIC images stay the existing `image`
+type — the raw bytes just aren't decodable in any browser except Safari 17+, so the
+item has to become renderable through a background conversion step rather than being
+usable the moment it's created. This pattern applies whenever a recognized source
+**can't be rendered/decoded immediately**, for whatever reason, and composes with the
+main checklist above rather than replacing it:
+
+- **Client-side item-size computation (step 17) must not assume decode succeeds.** If
+  computing the intrinsic size means loading the file into an `<img>`/`<video>`/etc.,
+  and that can fail for a format the browser can't handle, detect that case up front
+  (check the file's *name/extension*, not by waiting for a decode failure) and return a
+  placeholder size instead — the real dimensions get corrected server-side once
+  conversion finishes (below). Don't let a recognized-but-unrenderable format block
+  item creation entirely; that regresses to a confusing generic "could not import"
+  error with no indication of what actually failed.
+- **There are two distinct "not ready yet" windows for any media item, not one** — easy
+  to handle only the second and still see a broken-image flash in between:
+  1. **Local optimistic preview, before upload finishes.** The item's `source` is
+     temporarily a `blob:` URL from `URL.createObjectURL(file)`
+     (`client/src/services/item-upload.ts`), tracked in that service's own
+     upload-state list. A format check against the *DTO's `source` string* won't see
+     this phase at all — check the *original `File.name`* from the matching
+     upload-tracking entry instead (match by `objectUrl === dto.source`).
+  2. **Post-creation, pre-conversion.** The DTO's real `source` is now the
+     internally-hosted (but still unconverted) asset URL. A format-detection helper
+     used here has to work against a **presigned URL with a query string appended**,
+     not a bare filename — an extension check that just splits on the last `.` will
+     grab the entire query string as the "extension" and silently never match. Strip
+     everything from the first `?`/`#` onward before checking.
+
+     Reuse one shared placeholder component across both windows — the reference
+     implementation reuses the existing `ItemPlaceholder`/`LoadingSpinner` combo the
+     PDF viewer already uses for its own "not loaded yet" state (step 10) — rather than
+     inventing new UI or only covering one of the two windows.
+- **The server-side conversion job must correct more than just `source`.** If the
+  client had to guess a placeholder size, the job also needs to compute the *real* size
+  once it has decoded bytes (e.g. via `sharp(...).metadata()`) and update the item's
+  `width`/`height` to match — reusing the exact same clamp/aspect-ratio/default-width
+  math the client's own size-computation function uses, so the corrected size is
+  identical to what a normal, directly-renderable upload would have produced. Model the
+  job itself on an existing "download → transform → re-upload → update DB → re-trigger
+  thumbnail generation → notify connected clients" job (see `tapestry-server-worker`'s
+  job conventions) rather than writing this flow from scratch.
+- **Scope the conversion to sources the job can actually reach.** A background job that
+  downloads and re-uploads an asset needs to distinguish an internally-hosted source
+  (safe to fetch/replace) from an externally-hosted one — fetching and re-hosting an
+  external source would silently turn a by-reference import into a copy, a real design
+  question worth surfacing explicitly (see `tapestry-collection-imports`'
+  import-by-reference-vs-copy section) rather than deciding it unilaterally inside a
+  conversion job.
+
 ## Guardrails
 
 1. **One shared `core/` module for format logic, called from both client and server** —
@@ -266,3 +327,8 @@ lowercase-`type`/PascalCase-class convention exactly.
    If the actual goal is "let users paste a URL from platform X and import the file it
    describes" using an *existing* item type — not render something new — see
    `tapestry-external-media-sources` instead; it needs none of this checklist.
+9. **A recognized-but-not-immediately-renderable format is not a new item type** — see
+   "A variation" above. Don't reach for the full checklist (new schema variant, export
+   version bump, etc.) when the real need is a placeholder for two specific windows
+   (uploading, and post-creation-pre-conversion) plus a background job that corrects
+   `source` *and* size once real bytes are available.
