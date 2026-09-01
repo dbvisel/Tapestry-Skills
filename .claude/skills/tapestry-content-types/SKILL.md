@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format that needs server-side conversion before it's renderable (real reference: HEIC image import)
+description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format needing conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real competing PRs (HEIC image import)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -9,6 +9,8 @@ skill_discovery_hints:
   - keywords: ["IIIF", "deep zoom", "OpenSeadragon", "export version", "ExportV8"]
   - keywords: ["item factory", "itemSizes", "TapestryComponentsConfig", "thumbnail generator"]
   - keywords: ["HEIC", "unsupported format", "background conversion", "placeholder while converting", "broken image icon"]
+  - keywords: ["client-side vs server-side conversion", "lazy load dependency", "code splitting", "bundle size", "moduleResolution subpath exports"]
+  - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
 last_verified: 2026-09-01
 ---
 
@@ -33,11 +35,16 @@ surfaces a lighter, more common path (reusing the existing simple-file-matching 
 that IIIF alone would have made this skill overstate as always-necessary.
 
 A third, different kind of reference sits at the end of this skill (see "A variation:
-an existing type that needs server-side conversion before it's usable") — HEIC image
-import on this same fork, built and verified end-to-end against the real running app
-(not yet opened as a PR as of this writing). Unlike IIIF/`model3d`, it adds **no new
-item type at all** — it's what to do when an *existing* type accepts a format the
-browser can't render directly.
+an existing type that needs conversion before it's usable") — HEIC image import on this
+same fork, built as **two independent, complete, real reference implementations of the
+same feature**, opened as competing PRs against `asteasolutions/tapestry-project` for
+comparison: [#108](https://github.com/asteasolutions/tapestry-project/pull/108)
+(server-side conversion, a background job) and
+[#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side
+conversion, in the browser). Unlike IIIF/`model3d`, neither adds a new item type at
+all — both are what to do when an *existing* type accepts a format the browser can't
+render directly, and having both real and verified is what makes the "which approach"
+tradeoffs below concrete rather than theoretical.
 
 ## When to use this skill
 
@@ -241,15 +248,38 @@ lowercase-`type`/PascalCase-class convention exactly.
     `tapestry-client-features`) — not to `client/package.json` unless the library is
     genuinely editor-only. Add `@types/<library>` to the **root** `package.json` devDependencies
     if the library needs separate type definitions.
+
+    **If the library is heavy (a WASM decoder, etc.) and only needed for one specific format**,
+    lazy-load it rather than adding it to the initial bundle — but verify the split actually
+    happened rather than assuming a dynamic `import()` call is enough. Verified real mistake:
+    wrapping a library in its own module file and giving that file a plain top-level `import`
+    does **not** lazy-load it if that file is itself statically imported from always-loaded
+    code — the dependency still lands in the main chunk. Confirmed by comparing real Vite
+    build output before/after: the main chunk grew by exactly the dependency's size until the
+    `import()` call itself was moved to be the dynamic one, at the actual point of use, after
+    which the dependency appeared in its own separate chunk and the main chunk returned to
+    baseline. Always check the actual build output's chunk sizes, not just that you wrote
+    `import()` somewhere in the vicinity.
+
+    **A modern package's subpath exports (e.g. `some-lib/worker`) may not resolve under this
+    project's TypeScript config.** `client/tsconfig.app.json` uses `moduleResolution: "Node"`,
+    which predates package.json `exports` maps entirely — importing a documented subpath fails
+    with `TS2307` even though the file genuinely exists on disk. The real fix
+    (`moduleResolution: "bundler"`/`"node16"`/`"nodenext"`) is a project-wide tsconfig change
+    with its own ripple effects on the rest of the codebase's type-checking — treat that as a
+    separate decision requiring sign-off, not something to change casually just to unlock one
+    import; falling back to the package's main (non-subpath) export is the lower-risk choice
+    for a single feature.
 22. Update the README's item-type list / add a short doc for anything with non-obvious
     setup (API keys, registration, format quirks) — same reasoning as the docs step in
     `tapestry-auth-providers`.
 
-## A variation: an existing type that needs server-side conversion before it's usable
+## A variation: an existing type that needs conversion before it's usable
 
 Not every new "format" needs a new item type. HEIC images stay the existing `image`
 type — the raw bytes just aren't decodable in any browser except Safari 17+, so the
-item has to become renderable through a background conversion step rather than being
+item has to become renderable through a conversion step (server-side, in a background
+job, or client-side, in the browser — see the comparison below) rather than being
 usable the moment it's created. This pattern applies whenever a recognized source
 **can't be rendered/decoded immediately**, for whatever reason, and composes with the
 main checklist above rather than replacing it:
@@ -281,22 +311,96 @@ main checklist above rather than replacing it:
      implementation reuses the existing `ItemPlaceholder`/`LoadingSpinner` combo the
      PDF viewer already uses for its own "not loaded yet" state (step 10) — rather than
      inventing new UI or only covering one of the two windows.
-- **The server-side conversion job must correct more than just `source`.** If the
-  client had to guess a placeholder size, the job also needs to compute the *real* size
-  once it has decoded bytes (e.g. via `sharp(...).metadata()`) and update the item's
-  `width`/`height` to match — reusing the exact same clamp/aspect-ratio/default-width
-  math the client's own size-computation function uses, so the corrected size is
-  identical to what a normal, directly-renderable upload would have produced. Model the
-  job itself on an existing "download → transform → re-upload → update DB → re-trigger
-  thumbnail generation → notify connected clients" job (see `tapestry-server-worker`'s
-  job conventions) rather than writing this flow from scratch.
-- **Scope the conversion to sources the job can actually reach.** A background job that
-  downloads and re-uploads an asset needs to distinguish an internally-hosted source
-  (safe to fetch/replace) from an externally-hosted one — fetching and re-hosting an
-  external source would silently turn a by-reference import into a copy, a real design
-  question worth surfacing explicitly (see `tapestry-collection-imports`'
+
+     **If conversion itself happens client-side**, capture the original `File` object
+     while it's available (the upload-tracking entry from window 1) instead of
+     re-fetching the just-uploaded bytes back down from storage once window 2 starts —
+     a real, verified, entirely avoidable network round-trip otherwise. Keep it in a
+     ref that survives the transition from window 1 to window 2 (the component instance
+     doesn't remount between them), and fall back to fetching from the URL only when no
+     captured file is available (e.g. discovering an already-uploaded, still-unconverted
+     item on a fresh page load, where nothing was ever in memory).
+- **The conversion step must correct more than just `source`.** If the client had to
+  guess a placeholder size, whatever does the conversion — a server-side job or the
+  client itself — also needs to compute the *real* size once it has decoded bytes (e.g.
+  via `sharp(...).metadata()` server-side, or the client's own `getImageItemSize` on the
+  converted file) and update the item's `width`/`height` to match, reusing the exact
+  same clamp/aspect-ratio/default-width math the normal size-computation path uses, so
+  the corrected size is identical to what a directly-renderable upload would have
+  produced. A server-side job should be modeled on an existing "download → transform →
+  re-upload → update DB → re-trigger thumbnail generation → notify connected clients"
+  job (see `tapestry-server-worker`'s job conventions); a client-side conversion should
+  reuse the existing REST update path other one-off "fix up this item after some
+  out-of-band work" features already use (e.g. `resource('items').update(...)`, the
+  same call the "change thumbnail" feature makes) rather than inventing a new one — both
+  paths funnel through the same live-update notification, so collaborators see the
+  correction either way, not just the tab that triggered it.
+- **Scope the conversion to sources it can actually reach — and know this is harder
+  client-side.** Whatever does the converting needs to distinguish an internally-hosted
+  source (safe to fetch/replace) from an externally-hosted one — fetching and re-hosting
+  an external source would silently turn a by-reference import into a copy, a real
+  design question worth surfacing explicitly (see `tapestry-collection-imports`'
   import-by-reference-vs-copy section) rather than deciding it unilaterally inside a
-  conversion job.
+  conversion step. A **server-side** job can check this cheaply (the raw, pre-transform
+  DB value is a relative key for internal sources, an absolute URL for external ones).
+  A **client-side** conversion generally can't make this distinction as cheaply — by the
+  time a URL reaches the browser it's already been transformed into an absolute,
+  presigned-or-not URL indistinguishable from an external one — so a client-side
+  approach may need to accept converting external sources too, or find another signal,
+  rather than assuming the same cheap check is available.
+
+### Choosing client-side vs. server-side conversion
+
+Both are real options with genuinely different tradeoffs, verified against the two
+real reference PRs above rather than reasoned about in the abstract:
+
+- **Server-side** (background job): zero client bundle cost; needs a Docker/worker
+  image change if the conversion tool isn't already present; can cheaply distinguish
+  internal from external sources (see above); but is serialized behind whatever else
+  the *same* worker is doing — BullMQ's `Worker` defaults to `concurrency: 1` unless
+  explicitly configured, so one worker process handles exactly one job at a time. A
+  conversion job queued while the worker is mid-way through something slow (e.g. a
+  multi-minute Puppeteer tapestry-screenshot job) simply waits — safely, nothing is
+  lost, but the user-visible "converting" placeholder can persist far longer than the
+  conversion itself would take in isolation.
+- **Client-side** (in the browser): zero server/Docker changes, and immune to worker
+  contention entirely; but adds a real, if lazy-loadable, client bundle dependency, and
+  generally can't distinguish internal from external sources as cheaply (see above).
+
+**Judging whether a candidate dependency's bundle-size cost is reasonable**: compare its
+real, gzipped size against something already shipping unconditionally in the same
+bundle, not just its raw npm package size. Verified real comparison: a WASM HEIC decoder
+added ~700KB gzip (lazy-loaded, paid only by users who actually drop a HEIC file) versus
+`@zip.js/zip.js` — already a real, unconditional (not lazy-loaded) ~71.5KB-gzip
+dependency in this same client, for the similarly-occasional tapestry export/import
+feature. That's the right comparison to reach for; eyeballing an npm page's "size" badge
+in isolation doesn't tell you much.
+
+**Evaluating a candidate client-side decode/conversion library**, beyond "does it work":
+
+- **Check for real TypeScript declarations on the actual API you'll call, not just
+  whatever `.d.ts` file happens to ship.** Verified real case: `libheif-js` (the
+  "obvious" official npm wrapper for libheif) only types the low-level, unusable
+  Emscripten C-function bindings — its documented, actually-usable `HeifDecoder` API is
+  completely untyped. A purpose-built wrapper (`heic-to`, in this case) shipped a real
+  `.d.ts` for the high-level API actually meant to be called.
+- **Check the license of what's actually bundled inside, not just the package's own
+  declared license field.** Verified real case: `heic2any` bundles libheif's compiled,
+  LGPL-3.0-licensed code but relicenses the wrapper as MIT without the attribution LGPL
+  requires — a real, still-open GitHub issue, not a hypothetical concern. `heic-to`
+  declares (and appears to correctly honor) LGPL-3.0 for the same underlying engine.
+- A library that's purpose-built for exactly your use case and actively tracks its
+  underlying engine's releases (`heic-to` tracks new `libheif` releases closely) can
+  beat both a generic-but-mislicensed popular option and a correctly-licensed-but-barely-typed
+  official binding.
+
+**Don't assume decode performance is comparable between a native binary and a
+browser-executed decoder without actually measuring it on the target platform.** Native
+`heif-convert` decoding a real 12MP HEIC photo took ~0.5 seconds, measured directly
+inside the actual worker container. The equivalent client-side WASM/JS decode time in a
+real browser was *not* independently measured in the same session (no browser-automation
+tool was available to drive DevTools' own timing) — that gap in verification is called
+out here deliberately rather than papered over with an assumed number.
 
 ## Guardrails
 
@@ -330,5 +434,15 @@ main checklist above rather than replacing it:
 9. **A recognized-but-not-immediately-renderable format is not a new item type** — see
    "A variation" above. Don't reach for the full checklist (new schema variant, export
    version bump, etc.) when the real need is a placeholder for two specific windows
-   (uploading, and post-creation-pre-conversion) plus a background job that corrects
+   (uploading, and post-creation-pre-conversion) plus a conversion step that corrects
    `source` *and* size once real bytes are available.
+10. **Verify a lazy-loaded dependency actually landed in its own chunk** — check real
+    build output, not just that an `import()` call exists somewhere. A static top-level
+    import in a file that's itself always loaded defeats the split silently.
+11. **A package's subpath exports (`lib/worker`, `lib/csp`, etc.) may not resolve under
+    this project's client `moduleResolution: "Node"`** — don't casually change that
+    project-wide setting to unlock one import; fall back to the main export instead.
+12. **When evaluating a client-side WASM/native-binding wrapper library**, check for real
+    TypeScript types on the specific API you'll call (not just any `.d.ts` file existing)
+    and the license of what's actually bundled (not just the package's declared license
+    field) — both have real, verified failure cases among popular HEIC-decoding options.

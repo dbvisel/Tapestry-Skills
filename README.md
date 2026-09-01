@@ -45,7 +45,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
-| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models — plus a variation for an *existing* type accepting a format that needs server-side conversion before it's renderable (real reference: HEIC image import) |
+| [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models — plus a variation for an *existing* type accepting a format that needs conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real, competing PRs (HEIC image import) |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
 | [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
@@ -224,3 +224,28 @@ during review, in case future editors hit the same trap:
   there's only one real example so far — matching this repo's own pattern of splitting
   only once something's proven to generalize across more than one real case (see
   `tapestry-pr-conventions` above).
+- That same feature then got a **second, independent, real implementation** — a
+  client-side conversion variant, opened as a second competing PR
+  ([#109](https://github.com/asteasolutions/tapestry-project/pull/109), alongside the
+  server-side [#108](https://github.com/asteasolutions/tapestry-project/pull/108)) — and
+  the "only one real example so far" reasoning above for not splitting the variation
+  section out no longer fully applies (there are now two), but the section stayed put
+  since it's still small and still exists to redirect someone away from the big
+  checklist, not to house a growing library of conversion patterns. Real findings from
+  building the client-side variant, generalized into the skill: (1) a static top-level
+  `import` of a heavy library, even inside its own module file, does not lazy-load it if
+  that file is itself always loaded — confirmed by literally comparing real Vite build
+  output before/after moving to a dynamic `import()` at the actual call site, watching
+  the dependency move from the main chunk into its own; (2) `client/tsconfig.app.json`'s
+  `moduleResolution: "Node"` can't resolve a package's subpath exports at all, discovered
+  via a `TS2307` on an otherwise-real, otherwise-documented import path; (3) evaluating
+  three real candidate HEIC-decoding libraries surfaced two independently-verifiable
+  failure modes worth generalizing beyond HEIC specifically — `libheif-js` (typed only at
+  the useless low-level C-binding layer, not the actually-documented high-level API) and
+  `heic2any` (a real, still-open LGPL-attribution violation, not a hypothetical one) —
+  before landing on a better-fitting third option (`heic-to`); (4) a real, avoidable
+  network round-trip in the first draft of the client-side conversion code itself
+  (re-fetching bytes from storage that were already sitting in memory from the original
+  drop), caught by the user noticing the feature felt slightly slower and asking about
+  it, not by anything automated. That last one is a good example of a "learned during
+  code review, not during initial implementation" finding making it into a skill.
