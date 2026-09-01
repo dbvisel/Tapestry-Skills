@@ -8,7 +8,9 @@ skill_discovery_hints:
   - keywords: ["tapestry-project", "tapestries", "local dev", "run tapestry locally", "npm run local", "docker-compose.local.yml"]
   - keywords: ["LocalStack", "Vault dev", "vite dev server", "server/.env", "client/.env"]
   - keywords: ["MinIO installer", "setup.sh", "CSP", "Content-Security-Policy", "connect-src"]
-last_verified: 2026-08-19
+  - keywords: ["connection refused", "ECONNREFUSED", "AWS_INTERNAL_ENDPOINT_URL", "INTERNAL_VIEWER_URL", "worker can't reach S3"]
+  - keywords: ["extra_hosts host-gateway", "localhost from inside container", "musl localhost"]
+last_verified: 2026-08-31
 ---
 
 Run Tapestries locally. **`internetarchive/tapestry-project` (`main`) is the definitive
@@ -191,6 +193,47 @@ docker compose -f docker-compose.minio.yml --profile minio up -d --build client
 
 Hard-refresh the browser afterward — the old bundle may be cached.
 
+## Internal vs. browser-facing addresses (Docker+MinIO installer only)
+
+Verified directly (real `curl`/`wget` tests from inside the containers, not just
+reasoning about it): when `server`/`worker` run as **Docker containers** via this
+installer, `AWS_ENDPOINT_URL=http://localhost:9000` and `VIEWER_URL=http://localhost:8080`
+work fine for the *browser* (the actual host machine), but are **unreachable from
+inside the `worker` container** — `localhost` inside a container means "this
+container," not your host, so nothing is listening on that port. This breaks any
+worker-side job that fetches/writes S3 itself (thumbnail generation, zip import, or
+any custom job that reads back what it just wrote) and Puppeteer's tapestry-screenshot
+job (which navigates to `VIEWER_URL`) — both fail with connection-refused errors that
+are easy to misread as "the install is broken," when actually the browser-facing and
+container-facing addresses are just two different things by design.
+
+**The fix, verified working**: `docker-compose.minio.yml`'s `worker` service overrides
+`AWS_ENDPOINT_URL`/`VIEWER_URL` to the Compose-network addresses (`http://minio:9000`,
+`http://client:80`) via `AWS_INTERNAL_ENDPOINT_URL`/`INTERNAL_VIEWER_URL` in `.env`,
+using Compose's nested-fallback interpolation (`${AWS_INTERNAL_ENDPOINT_URL:-${AWS_ENDPOINT_URL}}`),
+so it's a no-op when unset (e.g. real AWS S3, no MinIO). The API server's own
+environment is untouched — it only ever hands URLs to the browser, never fetches from
+S3 itself, so it always needs the browser-facing address. `setup.sh`/`.env.sample`
+already set this up; if you're comparing against an older checkout that predates it,
+this is the pattern to add.
+
+**A dead end worth knowing about, so it isn't re-tried**: remapping `localhost` itself
+via Compose `extra_hosts: ["localhost:host-gateway"]` looks like a tempting
+zero-app-config fix (and appears to work on a plain `alpine:latest` image) but
+**does not reliably work on this project's actual Alpine-based worker/server images**
+— verified with `curl -v`, which shows `localhost` resolving to `::1`/`127.0.0.1` only,
+completely ignoring the `/etc/hosts` entry Compose adds. This is musl libc
+special-casing the literal string `"localhost"` to bypass `/etc/hosts` — a real,
+version-dependent quirk, not a Compose or config mistake. Don't spend time on this
+approach again; the per-service environment override above is the one that's verified
+to actually work.
+
+**If you're troubleshooting this and are tempted to change `AWS_ENDPOINT_URL`/`VIEWER_URL`
+directly in `.env` to "fix" it** (e.g. to your machine's real LAN IP) — don't. That
+address is only reachable on your current network and breaks the moment it changes;
+the per-service override above is the actual fix and doesn't depend on any
+machine-specific value.
+
 ## Guardrails
 
 1. **Treat `internetarchive/tapestry-project` `main` as ground truth.** Verify
@@ -207,6 +250,21 @@ Hard-refresh the browser afterward — the old bundle may be cached.
 5. **Don't rename the checkout directory** if using Docker Compose for
    anything — Compose derives the project/volume names from it, and renaming
    orphans existing data into fresh empty volumes.
+6. **Check for an existing root `.env` before doing anything else on a checkout
+   you haven't worked with before.** If one exists, this is the Docker+MinIO
+   installer flow — use it, not the plain-upstream per-workspace `server/.env`/
+   `client/.env` + `docker-compose.local.yml` flow. Mixing the two under the same
+   Compose project name (both use the same default service/volume names) causes
+   real, confusing failures: an `Authentication failed against database server`
+   error from a Postgres volume initialized with the wrong flow's password, or
+   `The server does not support SSL connections` from upstream's `.env.example`
+   defaulting `DB_USE_SSL=true` against a plain `postgres:17-alpine` with no TLS
+   configured. Before assuming a data volume is stale/disposable and resetting it
+   to fix an auth error, check its creation date (`docker volume inspect`) — a
+   volume older than the current session is real evidence it holds real data.
+7. **`AWS_ENDPOINT_URL`/`VIEWER_URL` are browser-facing, not container-facing** —
+   see "Internal vs. browser-facing addresses" above before assuming a worker-side
+   connection-refused error means the install itself is broken.
 
 ## Bundled scripts and assets (fork-variation installer, not upstream)
 

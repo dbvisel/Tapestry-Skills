@@ -53,7 +53,6 @@ services:
       IA_ACCOUNT_ID: ${IA_ACCOUNT_ID}
       IA_SECRET: ${IA_SECRET}
       AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL}
-      AWS_INTERNAL_ENDPOINT_URL: ${AWS_INTERNAL_ENDPOINT_URL}
       TAPESTRY_THUMBNAIL_GENERATION_DELAY: 120_000
       TAPESTRY_THUMBNAIL_GENERATION_TIMEOUT: 600_000
       S3_CLEAN_UP_CRON_PATTERN: ${S3_CLEAN_UP_CRON_PATTERN}
@@ -83,6 +82,18 @@ services:
     init: true
     environment:
       <<: *server_env
+      # The API server hands this URL to the browser and must use the published,
+      # browser-reachable address (AWS_ENDPOINT_URL). The worker never talks to a
+      # browser - it only ever fetches/writes S3 objects for itself - so it can use
+      # the Compose-network address instead, which also works when the browser-facing
+      # host can't be resolved from inside a container at all (e.g. a bare
+      # "localhost" - see the "Internal vs. browser-facing addresses" section below).
+      # Falls back to AWS_ENDPOINT_URL when unset (e.g. real AWS S3, no MinIO).
+      AWS_ENDPOINT_URL: ${AWS_INTERNAL_ENDPOINT_URL:-${AWS_ENDPOINT_URL}}
+      # Same reasoning: Puppeteer (screenshotting a tapestry for its own thumbnail)
+      # runs in the worker and needs the client container's own Compose-network
+      # address, not the browser-facing VIEWER_URL.
+      VIEWER_URL: ${INTERNAL_VIEWER_URL:-${VIEWER_URL}}
       PUPPETEER_ARGS: "--no-sandbox,--disable-gpu,--disable-dev-shm-usage"
     depends_on:
       - db

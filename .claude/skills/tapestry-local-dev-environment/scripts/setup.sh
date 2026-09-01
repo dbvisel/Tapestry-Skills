@@ -202,6 +202,11 @@ ask SENTRY_DSN_SERVER "Backend (server) Sentry DSN"  "$(get_env SENTRY_DSN_SERVE
 # Ports are fixed by the compose file's published mappings (8080 client,
 # 3000 API), so we only vary the host portion of the URLs.
 VIEWER_URL="http://${HOST}:8080"
+# The worker's Puppeteer job (tapestry screenshot thumbnails) runs inside a container
+# and can't resolve $HOST as the browser does - it needs the client container's own
+# Compose-network address instead. Always the 'client' service, regardless of storage
+# backend, since the client container exists either way.
+INTERNAL_VIEWER_URL="http://client:80"
 EXTERNAL_SERVER_URL="http://${HOST}:3000"
 VITE_API_URL="http://${HOST}:3000/api"
 
@@ -294,6 +299,7 @@ set_env REPO_DIR              "$SCRIPT_DIR"
 # runtime (server / worker) values
 set_env HOST                  "$HOST"
 set_env VIEWER_URL            "$VIEWER_URL"
+set_env INTERNAL_VIEWER_URL   "$INTERNAL_VIEWER_URL"
 set_env EXTERNAL_SERVER_URL   "$EXTERNAL_SERVER_URL"
 set_env AUTH_PROVIDER         "$AUTH_PROVIDER"
 set_env GOOGLE_CLIENT_ID      "$GOOGLE_CLIENT_ID"

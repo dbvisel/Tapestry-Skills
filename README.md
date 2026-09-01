@@ -186,3 +186,23 @@ during review, in case future editors hit the same trap:
   only"). Both rounds' feedback was generalized out into a new skill,
   `tapestry-pr-conventions`, rather than left buried in one skill's history — real, verified
   signal from the actual gatekeeper who reviews PRs here, not invented best practice.
+- `tapestry-local-dev-environment`'s `AWS_INTERNAL_ENDPOINT_URL` previously described a
+  mechanism that **did not actually exist**: the `.env.sample`/`docker-compose.minio.yml`
+  this skill bundles set the variable, but nothing in `server/src/config.ts` or
+  `s3-service.ts` ever read it — a documentation-only fix that was never wired up or
+  verified against the real app. Discovered the hard way in a real session building a new
+  feature (HEIC image import) that, for the first time, actually depended on the worker
+  successfully self-fetching from S3 — every prior use of that code path (thumbnail
+  generation) fails silently on this exact gap, so nobody had noticed. Corrected to the
+  real, verified fix: `docker-compose.minio.yml`'s `worker` service overrides
+  `AWS_ENDPOINT_URL`/adds `VIEWER_URL` via Compose-level fallback interpolation
+  (`${AWS_INTERNAL_ENDPOINT_URL:-${AWS_ENDPOINT_URL}}`), not application code — confirmed
+  with real `curl`/`wget` tests from inside the containers, both before (connection
+  refused) and after (200 OK) the fix. Also ruled out, empirically, a tempting
+  zero-config alternative (`extra_hosts: ["localhost:host-gateway"]`) that turns out not to
+  work on this project's actual Alpine/musl-based images even though it works on a plain
+  `alpine:latest` image — see the skill's new "Internal vs. browser-facing addresses"
+  section. The broader lesson: a fix added only to bundled documentation/config files,
+  never exercised against the real running app, isn't verified just because it looks
+  reasonable — the same standard this repo already applies to bundled scripts ("run it for
+  real before calling it done") applies to config templates too.
