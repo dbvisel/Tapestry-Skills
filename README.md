@@ -249,3 +249,22 @@ during review, in case future editors hit the same trap:
   drop), caught by the user noticing the feature felt slightly slower and asking about
   it, not by anything automated. That last one is a good example of a "learned during
   code review, not during initial implementation" finding making it into a skill.
+- PR #109 then went through one more real rework, prompted by the user noticing the
+  item still appeared at a guessed placeholder size before conversion finished ("we
+  don't know what aspect ratio the HEIC has, and the defaults are giving the user the
+  wrong idea"). The fix wasn't a better placeholder — it was realizing the placeholder
+  didn't need to exist at all: conversion moved into a dedicated `ItemFactory` that runs
+  *before* `createMediaItem`, so the item is only ever created once its real size is
+  known. That deleted the placeholder component, the post-creation
+  `resource('items').update(...)` patch call, and all manual `pendingRequests` wiring in
+  one pass — the existing `insertDataTransfer` wrapper already puts every drop/paste
+  through a `pendingRequests` increment for the whole factory pipeline, so the standard
+  hourglass covers the wait for free. `tapestry-content-types`' variation section was
+  rewritten to lead with this as the preferred pattern (a bespoke async-resolution
+  `ItemFactory`, per the main checklist's step 16, applied to conversion) and to scope
+  the original placeholder-and-patch pattern to where it's actually still necessary — a
+  server-side job (PR #108), which has no choice but to create the item before the job
+  can attach to it. A nice side effect, also folded in: gating the new factory on
+  `source instanceof File` means it only ever sees a locally-dropped file, so it
+  incidentally solves the "can a client-side conversion tell internal from external
+  sources" problem from the first rework by never having a URL to evaluate at all.

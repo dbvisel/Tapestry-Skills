@@ -11,6 +11,7 @@ skill_discovery_hints:
   - keywords: ["HEIC", "unsupported format", "background conversion", "placeholder while converting", "broken image icon"]
   - keywords: ["client-side vs server-side conversion", "lazy load dependency", "code splitting", "bundle size", "moduleResolution subpath exports"]
   - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
+  - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
 last_verified: 2026-09-01
 ---
 
@@ -282,7 +283,35 @@ item has to become renderable through a conversion step (server-side, in a backg
 job, or client-side, in the browser — see the comparison below) rather than being
 usable the moment it's created. This pattern applies whenever a recognized source
 **can't be rendered/decoded immediately**, for whatever reason, and composes with the
-main checklist above rather than replacing it:
+main checklist above rather than replacing it.
+
+**Prefer resolving/converting before creating the item at all, when the async work can
+complete using data already in the browser.** This is just step 16's bespoke-`ItemFactory`
+pattern ("needs real async resolution logic first") applied to conversion instead of
+parsing: the factory does the conversion, then calls `createMediaItem` only once it has
+the final, correct bytes — so the item never exists in an unconverted state and needs no
+correction afterward. **Real, verified history**: PR #109's *first* implementation used
+the placeholder-and-patch approach documented below (create immediately with a guessed
+size, convert in the background, `resource('items').update(...)` to correct it after).
+It was reworked to convert-before-create once it became clear the browser already had
+the whole `File` in hand, with nothing structural forcing the item to exist before
+conversion finished. The rework deleted the placeholder component, the post-creation
+patch call, and all manual loading-state wiring — the existing `insertDataTransfer`
+wrapper (`client/src/pages/tapestry/view-model/utils.ts`) already puts a
+`pendingRequests` increment/decrement around the *entire* `ITEM_FACTORIES` pipeline for
+every drop/paste, so the standard hourglass indicator (`DoingWorkIndicator`) covers the
+conversion wait automatically, with zero bespoke UI. It also incidentally solves the
+internal-vs-external-source problem below for free: a factory gated on
+`source instanceof File` only ever sees a locally-dropped/selected file, so it never
+touches a URL-based source (internal or external) at all — there's no ambiguity to
+adjudicate because nothing but a real in-memory `File` is ever converted.
+
+**This only works when nothing forces the item to exist first.** A server-side
+background job (PR #108's approach) still needs a real DB row to attach the job to, so
+it has no choice but to create the item immediately and correct it once the job
+finishes — the placeholder-and-patch pattern below is still the right one for that case,
+and for any client-side case that genuinely can't finish resolving before creation
+(e.g. it depends on a value only available after the item is inserted).
 
 - **Client-side item-size computation (step 17) must not assume decode succeeds.** If
   computing the intrinsic size means loading the file into an `<img>`/`<video>`/etc.,
@@ -343,11 +372,16 @@ main checklist above rather than replacing it:
   import-by-reference-vs-copy section) rather than deciding it unilaterally inside a
   conversion step. A **server-side** job can check this cheaply (the raw, pre-transform
   DB value is a relative key for internal sources, an absolute URL for external ones).
-  A **client-side** conversion generally can't make this distinction as cheaply — by the
-  time a URL reaches the browser it's already been transformed into an absolute,
-  presigned-or-not URL indistinguishable from an external one — so a client-side
-  approach may need to accept converting external sources too, or find another signal,
-  rather than assuming the same cheap check is available.
+  A **client-side placeholder-and-patch** conversion generally can't make this
+  distinction as cheaply — by the time a URL reaches the browser it's already been
+  transformed into an absolute, presigned-or-not URL indistinguishable from an external
+  one — so that approach may need to accept converting external sources too, or find
+  another signal, rather than assuming the same cheap check is available. A
+  **convert-before-create** factory (above) sidesteps this entirely rather than solving
+  it: gating on `source instanceof File` means it only ever sees a locally-provided
+  file, so a pasted external URL of the same format is simply never intercepted or
+  converted — not because the factory distinguished internal from external, but because
+  it never had a URL to evaluate in the first place.
 
 ### Choosing client-side vs. server-side conversion
 
@@ -433,16 +467,24 @@ out here deliberately rather than papered over with an assumed number.
    `tapestry-external-media-sources` instead; it needs none of this checklist.
 9. **A recognized-but-not-immediately-renderable format is not a new item type** — see
    "A variation" above. Don't reach for the full checklist (new schema variant, export
-   version bump, etc.) when the real need is a placeholder for two specific windows
-   (uploading, and post-creation-pre-conversion) plus a conversion step that corrects
-   `source` *and* size once real bytes are available.
-10. **Verify a lazy-loaded dependency actually landed in its own chunk** — check real
+   version bump, etc.) when the real need is a conversion step before the item becomes
+   usable.
+10. **Prefer converting before creating the item over creating-then-patching**, whenever
+    the async work can finish using data already in the browser (a real, in-memory
+    `File`) — a bespoke `ItemFactory` (step 16) that converts and only then calls
+    `createMediaItem` needs no placeholder UI, no post-creation correction call, and gets
+    the hourglass indicator for free via the existing `insertDataTransfer` wrapper. Only
+    fall back to placeholder-then-patch (two windows: uploading, then
+    post-creation-pre-conversion; a correction call once conversion finishes) when
+    something genuinely forces the item to exist before the async work can complete —
+    e.g. a server-side background job that needs a DB row to attach to.
+11. **Verify a lazy-loaded dependency actually landed in its own chunk** — check real
     build output, not just that an `import()` call exists somewhere. A static top-level
     import in a file that's itself always loaded defeats the split silently.
-11. **A package's subpath exports (`lib/worker`, `lib/csp`, etc.) may not resolve under
+12. **A package's subpath exports (`lib/worker`, `lib/csp`, etc.) may not resolve under
     this project's client `moduleResolution: "Node"`** — don't casually change that
     project-wide setting to unlock one import; fall back to the main export instead.
-12. **When evaluating a client-side WASM/native-binding wrapper library**, check for real
+13. **When evaluating a client-side WASM/native-binding wrapper library**, check for real
     TypeScript types on the specific API you'll call (not just any `.d.ts` file existing)
     and the license of what's actually bundled (not just the package's declared license
     field) — both have real, verified failure cases among popular HEIC-decoding options.
