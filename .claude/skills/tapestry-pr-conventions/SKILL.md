@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real review rounds on one real PR (#96, IA search-query import) — comment discipline, merge-don't-duplicate, composition over internal dependency — plus the concrete gh/GraphQL commands for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
+description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and four review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus the concrete gh/GraphQL commands for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,18 +8,21 @@ skill_discovery_hints:
   - keywords: ["PR review", "code review conventions", "pull request feedback", "tapestry-project PR"]
   - keywords: ["resolve review thread", "reply to PR comment", "gh api pulls comments", "GraphQL resolveReviewThread"]
   - keywords: ["comment discipline", "merge duplicate components", "composition over internal dependency"]
-last_verified: 2026-08-21
+  - keywords: ["authoritative signal over derived guess", "mediaType vs file extension", "narrowing an existing pipeline's input space", "speculative dead code", "unused generality"]
+last_verified: 2026-09-02
 ---
 
-What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across two
-real review rounds on one real, currently-open PR
-([#96](https://github.com/asteasolutions/tapestry-project/pull/96), the IA search-query
-bulk-import feature — see `tapestry-collection-imports`, which this skill's findings were
-first folded into before being generalized out here). **This is a sample of one reviewer
-on one PR, not a universal law** — but every piece of feedback below was phrased as a
-general principle, not an IA-specific nitpick, so treat it as a real, verified signal
-about what this repo's actual gatekeeper cares about, worth applying proactively on any
-future PR to this project rather than waiting to be told again.
+What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across four
+real review rounds on two real PRs: [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+(the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
+skill's findings were first folded into before being generalized out here) and
+[#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
+import — see `tapestry-content-types`' variation section). **Same reviewer on both PRs**,
+which is itself real signal: feedback that recurs in the same shape across two unrelated
+features is a stable preference of this specific gatekeeper, not a one-PR quirk. Every
+piece of feedback below was phrased as a general principle, not a feature-specific nitpick,
+so treat it as worth applying proactively on any future PR to this project rather than
+waiting to be told again.
 
 ## When to use this skill
 
@@ -28,7 +31,7 @@ future PR to this project rather than waiting to be told again.
 - Replying to or resolving PR review comments via `gh`
 - Any skill in this repo whose checklist ends in "open a PR" should point here
 
-## What this reviewer actually asked for, verified across two rounds
+## What this reviewer actually asked for, verified across four rounds on two PRs
 
 1. **Don't add a near-duplicate sibling next to an existing near-identical one — merge
    them and parameterize by whatever actually differs.** Round 1: a new `search-list/`
@@ -79,6 +82,41 @@ future PR to this project rather than waiting to be told again.
    `tab=collection` is a real value that still had to be rejected because it would
    contradict this feature's own mandatory collection-exclusion. Verify each value against
    the real service rather than assuming a parameter is safe to pass through wholesale.
+6. **Trust the strongest signal already available before falling back to a weaker derived
+   one.** PR #109, round 1: a new `heicImageFactory` decided "is this HEIC" purely from a
+   filename extension, even though the surrounding pipeline (`parseMediaSource`) had
+   already resolved a real `mediaType` (from the browser's `File.type`, a mime lookup, or
+   the server's content-type proxy for a URL) and was passing it in as an argument the
+   factory ignored. Reviewer: *"This is not a reliable way to check if the source is a
+   heic image. We should first check the mediaType if it is image/heic or image/heif ...
+   if not, proceed only if the file extension is heic or heif."* The generalizable shape:
+   when a stronger signal is already sitting in scope (an argument, a prior resolution
+   step), check it first — don't re-derive a weaker approximation of the same fact from
+   scratch and let the strong one go unused.
+7. **Match the full input space of the pipeline you're plugging a new branch into — don't
+   silently narrow it to whatever you tested with.** Same comment, second half: *"If the
+   source is a link, download the image first, and then use maybe mediaSourceToBlob."*
+   `heicImageFactory` only branched on `File` instances and returned `null` for every
+   string (URL) source, even though the `ItemFactory` pipeline it was added to already
+   treats `File` and URL sources uniformly (both flow through the same `mediaType`
+   resolution before reaching any factory). The fix wasn't a special case for links — it
+   was recognizing that "download the source first" already had a shared helper
+   (`mediaSourceToBlob`) built for exactly this, so honoring the pipeline's existing input
+   space was a small addition, not new design work.
+8. **Expect literal-minded scrutiny of whether code matches what actually calls it — remove
+   generality nothing exercises rather than leaving it "just in case."** PR #109, round 1,
+   a one-line comment: *"why are we splitting by ? or # when we are passing a file name?"*
+   `isHeicSource` stripped a query string/fragment before checking an extension — logic
+   shaped for a URL, on a helper that (at the time) was only ever called with a bare
+   `File.name`. The reviewer reads code against its real call sites, not its most general
+   imaginable input; speculative handling for a case nothing currently produces reads as a
+   bug question, not defensive engineering. Fixed by removing the stripping from
+   `isHeicSource` entirely and moving "reduce a URL down to a bare filename" to a proper
+   `new URL(source).pathname`-based helper at the one call site that actually has a URL —
+   `isHeicSource` itself stayed a genuinely single-purpose, filename-only helper even after
+   point 7's fix made the factory accept URL sources too. The lesson isn't "never
+   generalize," it's "put the generalization at the point that actually needs it, not
+   inside a helper whose own contract doesn't call for it."
 
 ## The real review-comment workflow
 
@@ -90,10 +128,11 @@ REST API can reply to a comment but resolving a thread is GraphQL-only.
 
 ## Guardrails
 
-1. **This is observed behavior from one specific reviewer on one specific PR** — real and
-   worth taking seriously, but don't present it as if every asteasolutions reviewer or
-   every PR will behave identically. If a future PR's reviewer gives different guidance,
-   that's the more current signal for that PR.
+1. **This is observed behavior from one specific reviewer, now verified across two
+   unrelated PRs/features** — real and worth taking seriously, but still don't present it
+   as if every asteasolutions reviewer will behave identically; it's this reviewer's
+   pattern, not necessarily every gatekeeper's. If a future PR's reviewer gives different
+   guidance, that's the more current signal for that PR.
 2. **Don't add a speculative "why" comment expecting it to survive review here** — see
    point 4 above. This cuts against generic advice (including this skill set's own default
    elsewhere) to explain non-obvious constraints; this repo's bar is specifically narrower.
@@ -104,8 +143,16 @@ REST API can reply to a comment but resolving a thread is GraphQL-only.
 4. **Resolving a thread requires GraphQL** — `gh pr view --comments` and the REST
    `pulls/comments` endpoints can read and reply, but `isResolved` only appears in
    `reviewThreads` via GraphQL, and only `resolveReviewThread` can flip it.
-5. See `tapestry-collection-imports` for the concrete PR (#96) all of the above was
-   verified against, including the actual code before/after each round of feedback.
+5. **When adding a branch/case to an existing polymorphic pipeline** (an `ItemFactory`, a
+   dispatcher, anything that already accepts more than one input shape), check what the
+   *pipeline* already supports before assuming your new branch's scope — don't let it
+   silently cover fewer cases than the thing it's plugged into.
+6. **Don't add defensive/general-purpose handling for an input shape nothing currently
+   passes in** — see point 8 above. Write the helper for what actually calls it today;
+   widen it when a real caller needs the wider case, not preemptively.
+7. See `tapestry-collection-imports` for the concrete PR (#96), and `tapestry-content-types`
+   for PR (#109), that all of the above was verified against, including the actual code
+   before/after each round of feedback.
 
 ## Bundled references
 

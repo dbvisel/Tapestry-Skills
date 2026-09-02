@@ -12,7 +12,7 @@ skill_discovery_hints:
   - keywords: ["client-side vs server-side conversion", "lazy load dependency", "code splitting", "bundle size", "moduleResolution subpath exports"]
   - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
   - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -300,11 +300,20 @@ patch call, and all manual loading-state wiring — the existing `insertDataTran
 wrapper (`client/src/pages/tapestry/view-model/utils.ts`) already puts a
 `pendingRequests` increment/decrement around the *entire* `ITEM_FACTORIES` pipeline for
 every drop/paste, so the standard hourglass indicator (`DoingWorkIndicator`) covers the
-conversion wait automatically, with zero bespoke UI. It also incidentally solves the
-internal-vs-external-source problem below for free: a factory gated on
-`source instanceof File` only ever sees a locally-dropped/selected file, so it never
-touches a URL-based source (internal or external) at all — there's no ambiguity to
-adjudicate because nothing but a real in-memory `File` is ever converted.
+conversion wait automatically, with zero bespoke UI.
+
+**A tempting-looking shortcut that real review rejected**: gating the factory on
+`source instanceof File` looked like it would incidentally sidestep the
+internal-vs-external-source problem below for free (never seeing a URL at all means
+nothing to adjudicate). Real review feedback on this exact PR explicitly asked for the
+opposite — link/URL sources should be converted too, downloaded via the existing
+`mediaSourceToBlob` (`client/src/lib/media.ts`) first — see
+`tapestry-pr-conventions`' "match the full input space of the pipeline you're plugging
+into" finding. So the factory now branches on `mediaType` (checked first, since it's
+already resolved by the surrounding pipeline for both File and URL sources) with a
+filename-extension fallback, and handles both source shapes uniformly. The
+internal-vs-external distinction below is not actually sidestepped by this design —
+see the corrected guidance there.
 
 **This only works when nothing forces the item to exist first.** A server-side
 background job (PR #108's approach) still needs a real DB row to attach the job to, so
@@ -372,16 +381,22 @@ and for any client-side case that genuinely can't finish resolving before creati
   import-by-reference-vs-copy section) rather than deciding it unilaterally inside a
   conversion step. A **server-side** job can check this cheaply (the raw, pre-transform
   DB value is a relative key for internal sources, an absolute URL for external ones).
-  A **client-side placeholder-and-patch** conversion generally can't make this
-  distinction as cheaply — by the time a URL reaches the browser it's already been
-  transformed into an absolute, presigned-or-not URL indistinguishable from an external
-  one — so that approach may need to accept converting external sources too, or find
-  another signal, rather than assuming the same cheap check is available. A
-  **convert-before-create** factory (above) sidesteps this entirely rather than solving
-  it: gating on `source instanceof File` means it only ever sees a locally-provided
-  file, so a pasted external URL of the same format is simply never intercepted or
-  converted — not because the factory distinguished internal from external, but because
-  it never had a URL to evaluate in the first place.
+  A **client-side** conversion generally can't make this distinction as cheaply — by the
+  time a URL reaches the browser it's already been transformed into an absolute,
+  presigned-or-not URL indistinguishable from an external one.
+
+  **Real, verified outcome, not a hypothetical**: a File-only `convert-before-create`
+  factory looked like it would sidestep this problem entirely (never seeing a URL means
+  nothing to adjudicate) — but the actual PR #109 reviewer explicitly rejected that
+  narrower scope and asked for link/URL sources to be converted too, without raising the
+  by-reference-vs-copy concern themselves. The shipped factory now converts a matching
+  URL source the same as a matching File, via `mediaSourceToBlob` — meaning **this
+  specific codebase's real reviewer prioritized uniform format-handling over preserving
+  by-reference imports for this feature**, at least implicitly. Don't assume that
+  priority generalizes to a different feature or reviewer: treat the
+  by-reference-vs-copy question as still worth raising explicitly the first time it comes
+  up on a new feature, rather than assuming silence here means it's a non-issue
+  project-wide.
 
 ### Choosing client-side vs. server-side conversion
 

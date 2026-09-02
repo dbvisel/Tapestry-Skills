@@ -51,7 +51,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
-| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer across two real review rounds on PR #96 — comment discipline, merge-don't-duplicate, composition over internal dependency — plus the exact `gh`/GraphQL commands for replying to and resolving PR review comments |
+| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across four review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus the exact `gh`/GraphQL commands for replying to and resolving PR review comments |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -264,7 +264,30 @@ during review, in case future editors hit the same trap:
   `ItemFactory`, per the main checklist's step 16, applied to conversion) and to scope
   the original placeholder-and-patch pattern to where it's actually still necessary — a
   server-side job (PR #108), which has no choice but to create the item before the job
-  can attach to it. A nice side effect, also folded in: gating the new factory on
-  `source instanceof File` means it only ever sees a locally-dropped file, so it
-  incidentally solves the "can a client-side conversion tell internal from external
-  sources" problem from the first rework by never having a URL to evaluate at all.
+  can attach to it. At the time, gating the new factory on `source instanceof File` also
+  looked like a nice side effect: only ever seeing a locally-dropped file meant it never
+  had a URL to evaluate, incidentally sidestepping the "can a client-side conversion tell
+  internal from external sources" problem from the first rework. **That didn't survive
+  actual review** — see the next bullet.
+- The real reviewer's first pass on PR #109 (round 1, same reviewer as #96 — see
+  `tapestry-pr-conventions`) caught two things the self-review above missed: (1) HEIC
+  detection was extension-only, ignoring the `mediaType` the surrounding pipeline had
+  already resolved and was passing in as an argument; (2) the factory's File-only gating
+  wasn't actually a clever design choice, it was an unrequested scope cut — the reviewer
+  explicitly asked for link/URL sources to be downloaded (via the existing
+  `mediaSourceToBlob`) and converted too, which is exactly the case the previous bullet's
+  "nice side effect" was quietly relying on never happening. Fixed by checking `mediaType`
+  first and falling back to the filename extension only when `mediaType` is unresolved,
+  and by handling string sources through `mediaSourceToBlob` same as `File` ones. A third,
+  smaller comment — *"why are we splitting by ? or # when we are passing a file name?"* on
+  `isHeicSource`'s query-string stripping — flagged genuinely dead code: that stripping
+  was shaped for a URL input the function never actually received at the time. Fixed by
+  moving "reduce a URL to a bare filename" to a dedicated `new URL(...).pathname`-based
+  helper at the one call site that now actually has a URL, keeping `isHeicSource` itself a
+  real single-purpose, filename-only helper. Both findings, plus the two from PR #96,
+  generalized into `tapestry-pr-conventions` as new numbered points — worth reading before
+  writing any new `ItemFactory`-style branch on an existing pipeline. The broader lesson
+  for this README specifically: a "nice side effect" noticed during self-review, before a
+  real reviewer has looked at the code, is a hypothesis, not a finding — this bullet
+  existed for less than a day before the next real review round showed it was actually a
+  gap.
