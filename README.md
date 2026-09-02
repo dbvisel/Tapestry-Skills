@@ -51,7 +51,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
-| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across four review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus the exact `gh`/GraphQL commands for replying to and resolving PR review comments |
+| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across four review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus a pre-submission self-review checklist and the exact `gh`/GraphQL commands (with a real empty-review-body gotcha) for replying to and resolving PR review comments |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -291,3 +291,16 @@ during review, in case future editors hit the same trap:
   real reviewer has looked at the code, is a hypothesis, not a finding — this bullet
   existed for less than a day before the next real review round showed it was actually a
   gap.
+- Asked directly whether there were more general process-level learnings from this same
+  PR loop, beyond individual review-comment findings — two came out of it, both folded
+  into `tapestry-pr-conventions` as a "Pre-submission checklist" section (not just another
+  numbered finding, a new kind of section): (1) the accumulated findings across #96 and
+  #109 are specific and numerous enough now to actually run as a self-review pass against
+  a diff *before* opening/updating a PR, rather than only serving as an after-the-fact
+  explanation once a reviewer has already commented — the goal being to catch what's
+  catchable without paying for a full review round-trip; (2) a real `gh` CLI gotcha: PR
+  #109's round-1 review showed up via `gh pr view --json reviews` as `state: "COMMENTED"`
+  with an empty `body` — the real feedback was two inline comments, only visible via
+  `gh api .../pulls/<number>/comments`. An empty-body review reads like "nothing to
+  address" if you stop there; it isn't. Not yet verified whether the checklist actually
+  reduces round-trips on a real subsequent PR — that's the next thing to check.

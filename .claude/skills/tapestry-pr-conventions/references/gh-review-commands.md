@@ -13,6 +13,13 @@ Reviews (the top-level "approved"/"commented"/"changes requested" events):
 gh api repos/<owner>/<repo>/pulls/<number>/reviews
 ```
 
+**A `state: "COMMENTED"` review commonly has an empty `body`.** Don't stop here and
+conclude there's no feedback — this reviewer's actual comments are almost always
+line-level, only visible via the inline-comments call below. An empty-body review is a
+prompt to run that call, not evidence there's nothing to address. (The same applies to
+`gh pr view <number> --json reviews,comments` — `comments` there is top-level issue
+comments only and won't show inline review comments either.)
+
 Every inline (line-level) comment, across all reviews, with the review it belongs to:
 
 ```bash

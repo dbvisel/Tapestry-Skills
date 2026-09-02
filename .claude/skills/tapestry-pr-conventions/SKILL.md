@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and four review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus the concrete gh/GraphQL commands for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
+description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and four review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -9,6 +9,7 @@ skill_discovery_hints:
   - keywords: ["resolve review thread", "reply to PR comment", "gh api pulls comments", "GraphQL resolveReviewThread"]
   - keywords: ["comment discipline", "merge duplicate components", "composition over internal dependency"]
   - keywords: ["authoritative signal over derived guess", "mediaType vs file extension", "narrowing an existing pipeline's input space", "speculative dead code", "unused generality"]
+  - keywords: ["pre-submission checklist", "self-review before PR", "empty review body", "gh pr view comments empty", "catch review feedback before opening a PR"]
 last_verified: 2026-09-02
 ---
 
@@ -22,11 +23,14 @@ which is itself real signal: feedback that recurs in the same shape across two u
 features is a stable preference of this specific gatekeeper, not a one-PR quirk. Every
 piece of feedback below was phrased as a general principle, not a feature-specific nitpick,
 so treat it as worth applying proactively on any future PR to this project rather than
-waiting to be told again.
+waiting to be told again. Whoever is about to open or update a PR here — this skill is
+meant to be run as a self-review pass on your own diff (see "Pre-submission checklist"
+below), not just consulted after a reviewer has already commented.
 
 ## When to use this skill
 
-- Before opening or updating a PR against `asteasolutions/tapestry-project`
+- Before opening or updating a PR against `asteasolutions/tapestry-project` — run the
+  pre-submission checklist below against your diff first
 - "Why did the reviewer ask for X" / anticipating what a reviewer here will flag
 - Replying to or resolving PR review comments via `gh`
 - Any skill in this repo whose checklist ends in "open a PR" should point here
@@ -118,6 +122,42 @@ waiting to be told again.
    generalize," it's "put the generalization at the point that actually needs it, not
    inside a helper whose own contract doesn't call for it."
 
+## Pre-submission checklist: catch these before the reviewer does
+
+The point of tracking this reviewer's feedback across multiple PRs is to stop paying for
+it one review round-trip at a time. Before opening or updating a PR against this repo,
+walk your own diff against each finding above as a self-review pass — most of it is
+checkable without waiting for a live comment:
+
+1. **Duplication** — does this add something ~90% identical to existing code, differing
+   only in a value? Merge them and parameterize by whatever actually differs (point 1).
+2. **Return shape** — does a function return a single-field wrapper object? Return the
+   plain value and name the function after exactly what it returns (point 2).
+3. **Composition** — does a "generic" helper call another helper to apply a
+   caller-specific transformation to its own argument? Move that transformation to the
+   call site instead (point 3).
+4. **Comments** — does any comment do more than explain genuinely core logic or complex
+   math? Delete it — a well-reasoned "why" comment gets flagged here too (point 4).
+5. **Live behavior** — does this depend on how an external service or site actually
+   behaves? Verify against the real thing before claiming it's handled, not just docs or
+   memory (point 5).
+6. **Signal strength** — is this re-deriving a fact (a format, a type) from a weak signal
+   (a filename extension, a guess) when a stronger one (an already-resolved value passed
+   in as an argument, a prior computation) is sitting unused in scope? Use the strong
+   signal first, and only fall back to the weak one when the strong one is unavailable
+   (point 6).
+7. **Pipeline scope** — does this add a branch/case to an existing polymorphic pipeline
+   (an `ItemFactory`, a dispatcher, anything that already accepts more than one input
+   shape)? Confirm it covers every shape the pipeline itself already supports, not just
+   the one you happened to test with (point 7).
+8. **Dead/speculative code** — does any logic handle an input shape nothing currently
+   passes to it? Remove it; add it back only once a real caller needs it (point 8).
+
+Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
+review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
+minutes of self-review. Every point above earned its place in this list by actually
+costing a round-trip once already.
+
 ## The real review-comment workflow
 
 PR review comments on GitHub don't get "fixed" by just pushing a commit — reply to each
@@ -125,6 +165,14 @@ inline comment explaining what changed (or why not), and mark the thread resolve
 it's genuinely addressed. See `references/gh-review-commands.md` for the exact commands —
 worth using directly rather than re-deriving the GraphQL mutation shape each time; the
 REST API can reply to a comment but resolving a thread is GraphQL-only.
+
+**A top-level review can have an empty `body` and still carry all the real feedback.**
+PR #109's round-1 review showed up via `gh pr view --json reviews` as
+`state=COMMENTED` with `body: ""` — reading only that field looks like "reviewed, no
+comments." The actual feedback was two inline (line-level) comments, only visible via
+`gh api repos/<owner>/<repo>/pulls/<number>/comments`. Treat a commented-but-empty-body
+review as a prompt to go check inline comments, not as a sign there's nothing to
+address.
 
 ## Guardrails
 
