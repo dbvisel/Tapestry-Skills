@@ -13,12 +13,14 @@ Reviews (the top-level "approved"/"commented"/"changes requested" events):
 gh api repos/<owner>/<repo>/pulls/<number>/reviews
 ```
 
-**A `state: "COMMENTED"` review commonly has an empty `body`.** Don't stop here and
-conclude there's no feedback — this reviewer's actual comments are almost always
-line-level, only visible via the inline-comments call below. An empty-body review is a
-prompt to run that call, not evidence there's nothing to address. (The same applies to
-`gh pr view <number> --json reviews,comments` — `comments` there is top-level issue
-comments only and won't show inline review comments either.)
+**A review commonly has an empty `body` regardless of its `state` — `COMMENTED` most
+often, but a real `APPROVED` review on this repo has shown up with an empty body and a
+substantive inline comment too.** Don't stop at the top-level `state`/`body` and conclude
+there's no feedback (or, for an approval, no follow-up needed) — this reviewer's actual
+comments are almost always line-level, only visible via the inline-comments call below.
+Treat any empty-body review, approving or not, as a prompt to run that call. (The same
+applies to `gh pr view <number> --json reviews,comments` — `comments` there is top-level
+issue comments only and won't show inline review comments either.)
 
 Every inline (line-level) comment, across all reviews, with the review it belongs to:
 

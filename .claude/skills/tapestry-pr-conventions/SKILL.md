@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and five review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into, don't fallback where the primary signal is already reliable, fit the actual API surface instead of an assumed one — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
+description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import), six review rounds, and one direct design question from the same reviewer outside GitHub — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its own boundary conditions), match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -14,8 +14,9 @@ skill_discovery_hints:
 last_verified: 2026-09-02
 ---
 
-What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across five
-real review rounds on two real PRs: [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across six
+real review rounds on two real PRs (plus one direct follow-up question from the same
+reviewer, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
 skill's findings were first folded into before being generalized out here) and
 [#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
@@ -36,7 +37,7 @@ below), not just consulted after a reviewer has already commented.
 - Replying to or resolving PR review comments via `gh`
 - Any skill in this repo whose checklist ends in "open a PR" should point here
 
-## What this reviewer actually asked for, verified across five rounds on two PRs
+## What this reviewer actually asked for, verified across six rounds on two PRs
 
 1. **Don't add a near-duplicate sibling next to an existing near-identical one — merge
    them and parameterize by whatever actually differs.** Round 1: a new `search-list/`
@@ -147,6 +148,66 @@ below), not just consulted after a reviewer has already commented.
     needs, and don't thread a piece of information through a data structure just because
     the type technically wants a name for it — a fixed placeholder (`converted.jpg`) is
     fine when nothing consumes the value.
+11. **Before deriving a fact yourself, check whether an argument you already have fully
+    subsumes that derivation somewhere upstream in the same call chain — not just
+    whether a *stronger signal exists* (point 6), but whether the strong signal already
+    *is* the weak one plus more.** PR #109, round 3 (an otherwise-approving review):
+    *"Can we use only HEIC_MEDIA_TYPES.includes for our isHeic check? The extension is
+    already read at line 362 (mime.getType(source.name) ?? '') in
+    client/src/model/data/utils.ts."* Point 6 had already moved mediaType to be checked
+    first, but kept a same-shaped extension fallback "just in case" mediaType came back
+    empty — missing that for a `File` source, `mediaType`'s own resolution (`getMediaType`)
+    *already* falls back to the exact same `mime.getType(source.name)` lookup before ever
+    reaching this factory. The fallback looked strictly redundant — checking the extension
+    a second time seemed like it could never produce a different answer.
+    Trace an argument back through what actually produced it before assuming you need to
+    re-derive part of it defensively. **Caveat, found one round later (point 13): "strictly
+    redundant" was itself an overclaim** — it only followed from assuming `getMediaType`'s
+    fallback triggers whenever the extension check would help, which turned out to be false
+    for a specific truthy-but-generic value. Tracing an argument to its source tells you
+    what the *common case* produces; it doesn't by itself prove every input reaches that
+    source the same way — check the boundary conditions of the upstream logic too, not just
+    that it exists.
+12. **When a reviewer asks you to verify platform-specific runtime behavior you have no
+    access to (a real Windows machine, in this case), do the closest available research
+    and disclose it as research, not as an empirical test — don't skip it, and don't
+    silently present it with the same confidence as something you actually ran.** Same
+    comment, second half: *"See if that works properly on windows."* No Windows machine
+    or browser-automation tool was available; targeted web research (documented Chromium
+    behavior: `File.type` for `.heic` is empty without the Windows HEIF codec pack, which
+    is exactly the falsy case the code already falls through on) stood in for a live test,
+    and the reply to the reviewer said so explicitly, including the one edge case research
+    couldn't rule out (a third-party-corrupted MIME registry entry). This is the same
+    "verify against real behavior" instinct as point 5, extended to platform behavior
+    instead of an external website, and to research-as-substitute when literal access
+    isn't possible. **Strengthened one question later**: asked (by the user, not this
+    reviewer) whether the same question was testable on Linux instead of Windows — and it
+    was, for real, without any research-as-substitute caveat needed. Linux's MIME detection
+    (`shared-mime-info`, which Chromium's Linux `File.type` lookup consults) is an
+    installable, versioned package, so six real Ubuntu/Debian Docker images
+    (`docker run --rm <image> bash -c 'apt-get install -y shared-mime-info; grep -i heic
+    /usr/share/mime/packages/*'`) gave a genuine, verified version boundary: no
+    `.heic`/`.heif` glob at all below `shared-mime-info` 1.15 (Ubuntu 18.04's `1.9-2`),
+    present from `1.15-1` (Ubuntu 20.04) onward. **When the literal target platform is
+    inaccessible but a real, cheaply-spun-up adjacent system shares the underlying
+    mechanism, actually testing that adjacent system beats researching the original one** —
+    it produced the concrete finding in point 13 below, which pure Windows documentation
+    reading would not have surfaced.
+13. **A non-empty return value isn't automatically a reliable positive signal — some
+    values are themselves "I don't know" sentinels.** Following up on the Linux testing
+    above (not a reviewer comment, but the same real gatekeeper's original design
+    question, relayed directly rather than through a PR comment thread): *"should we
+    check the .heic extension additionally if the browser gives us image/png, or
+    application/octet-stream?"* `getMediaType`'s own fallback
+    (`source.type || mime.getType(...)`) only activates when `source.type` is *falsy* —
+    but the real Linux testing above showed a system with no MIME mapping for an
+    extension reports the **truthy** generic sentinel `application/octet-stream`, not an
+    empty string, which silently defeats a falsy-only fallback. The fix isn't "trust
+    mediaType less" across the board (a concrete `image/png` is a real positive claim,
+    worth trusting over the extension) — it's specifically recognizing the small set of
+    known "unknown" sentinel values and treating *those* as equivalent to no signal,
+    while still trusting every other concrete value. Don't let "does this value exist"
+    stand in for "does this value mean anything."
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -187,20 +248,51 @@ checkable without waiting for a live comment:
     needs the narrower type at all? Check the real signature first. Does it also
     manufacture a piece of metadata (a filename, an id) that nothing downstream reads?
     Drop it (point 10).
+11. **Trace it upstream** — before writing your own fallback/derivation for a value, check
+    what actually produced the argument you already have. If it already incorporates the
+    fallback you're about to re-add, yours is dead weight even though it looks defensive
+    (point 11).
+12. **Can't test it live? Say so — but check for an adjacent system you actually can
+    test first.** If a reviewer's ask (or your own diff) depends on platform/environment
+    behavior you can't run, look for a real, cheaply-accessible system that shares the
+    underlying mechanism (a Docker image of a different OS, an installable package that
+    embeds the platform database) before falling back to documentation research; whichever
+    you end up doing, state plainly what was actually tested versus researched, including
+    what you couldn't rule out (point 12).
+13. **"Non-empty" isn't "meaningful."** When trusting an already-resolved value over
+    re-deriving it (point 6/11), check whether that value has known "I don't know"
+    sentinels (`application/octet-stream`, and similar generic fallbacks elsewhere) that
+    are truthy but carry no real information — treat those the same as missing, while
+    still trusting every other concrete value (point 13).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
 minutes of self-review. Every point above earned its place in this list by actually
 costing a round-trip once already.
 
-**First real test of this checklist, and what it showed**: points 9 and 10 above were
-themselves found in a round-2 review of the round-1 *fix* for points 6/7 — a fix made
-before this checklist existed. So this round wasn't run through the checklist before
-being pushed, and can't be claimed as either a confirmation or a failure of it yet; it's
-the reason points 9-10 exist at all. The real test is the next PR round pushed *after*
-a checklist pass — worth explicitly noting in that PR's own history whether the checklist
-caught something before review, or the reviewer still found something the checklist
-missed (in which case, add it here too).
+**How this checklist has actually fared so far**: points 9-13 were all found on a
+*previous* round's fix, made before those points existed — so none of PR #109's rounds
+2-3-plus (including point 13's finding, which came through a direct message from the
+same reviewer rather than a fourth formal PR round) test the checklist; they're the
+reason points 9-13 exist at all. Round 3's *fix* (`48cc3e4`) was the first change
+actually run through this checklist (points 1-10, before 11-13 existed) before pushing —
+it came back clean, with one disclosed gap (point 12-shaped, before it had a number: live
+platform behavior that couldn't be tested, only researched) — a gap that then led
+straight to point 13's finding, meaning the checklist's own "disclose what you couldn't
+verify" habit is what surfaced the next real bug, not just a liability to manage. Whether
+a future fix draws a comment the checklist *should* have caught (because the relevant
+point already existed) or *couldn't* have caught (a genuinely new pattern) is the actual
+signal to watch for going forward — the former means "run it more carefully next time,"
+the latter means "add a new point," and both are useful, but only the former would mean
+the checklist itself has a gap.
+
+**A growing list is itself worth watching**: this checklist is now 13 items, entirely
+because it only ever grows when a real round of feedback justifies a new line. That's
+correct for keeping it evidence-based, but a 13-plus-item self-review pass risks becoming
+too long to actually run carefully every time — the opposite of the speed this was meant
+to buy. If it keeps growing, worth revisiting whether some points can merge (e.g. 6/9/11/13
+are all facets of "trust the strongest already-derived signal") rather than only ever
+appending.
 
 ## The real review-comment workflow
 
@@ -210,13 +302,15 @@ it's genuinely addressed. See `references/gh-review-commands.md` for the exact c
 worth using directly rather than re-deriving the GraphQL mutation shape each time; the
 REST API can reply to a comment but resolving a thread is GraphQL-only.
 
-**A top-level review can have an empty `body` and still carry all the real feedback.**
-PR #109's round-1 review showed up via `gh pr view --json reviews` as
-`state=COMMENTED` with `body: ""` — reading only that field looks like "reviewed, no
-comments." The actual feedback was two inline (line-level) comments, only visible via
-`gh api repos/<owner>/<repo>/pulls/<number>/comments`. Treat a commented-but-empty-body
-review as a prompt to go check inline comments, not as a sign there's nothing to
-address.
+**A top-level review can have an empty `body` and still carry all the real feedback —
+regardless of its `state`.** PR #109's round-1 review showed up via
+`gh pr view --json reviews` as `state=COMMENTED` with `body: ""` — reading only that
+field looks like "reviewed, no comments." The actual feedback was two inline (line-level)
+comments, only visible via `gh api repos/<owner>/<repo>/pulls/<number>/comments`. Round 3
+repeated this with a `state=APPROVED` review — an *approval* that still carried one
+substantive inline comment, with the same empty top-level body. Treat any empty-body
+review — approving or not — as a prompt to go check inline comments, not as a sign
+there's nothing to address.
 
 ## Guardrails
 

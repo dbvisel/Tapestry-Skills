@@ -51,7 +51,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
-| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across five review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one — plus a pre-submission self-review checklist and the exact `gh`/GraphQL commands (with a real empty-review-body gotcha) for replying to and resolving PR review comments |
+| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across six review rounds on two real PRs (#96, #109) plus one direct follow-up question from the same reviewer — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its boundary conditions), match the full input space of the pipeline you're plugging into, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist and the exact `gh`/GraphQL commands (with a real empty-review-body gotcha) for replying to and resolving PR review comments |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -317,3 +317,34 @@ during review, in case future editors hit the same trap:
   still hasn't happened yet: it requires a PR pushed *after* running the checklist against
   the diff, which this round wasn't. Whether that happens depends on there being a next
   round to check it against.
+- Round 3 (an *approving* review that still carried one substantive comment — worth
+  remembering the empty-body gotcha above generalizes to "COMMENTED" specifically, not to
+  every review, since an APPROVED review's own body was also empty here but the real
+  content was still inline) finally gave the checklist its first real trial: the fix for
+  that comment (`48cc3e4`) was run through the then-10-point checklist before pushing, and
+  came back clean — the one gap it surfaced (`tapestry-pr-conventions` point 11: "trace an
+  argument to what already produced it" — mediaType already subsumes the extension check
+  the code was doing a second time) was itself something the checklist, as it stood, had
+  no point for yet. So: partial validation. The checklist didn't fail to catch something
+  it should have; it just didn't yet contain the thing needed.
+- Then a design question came back from the same reviewer directly (not a GitHub comment
+  this time — relayed by the user) about that very fix: should the code fall back to the
+  extension when the browser reports `image/png` or `application/octet-stream`? Answering
+  it well took two more real steps: (1) the user asked whether the Windows behavior from
+  the prior round's research was independently testable on Linux — it was, and unlike
+  Windows, actually testable for real: `shared-mime-info` (which Chromium's Linux MIME
+  lookup consults) is an installable, versioned package, so six real Ubuntu/Debian Docker
+  images gave a genuine version boundary (no `.heic`/`.heif` mapping before
+  `shared-mime-info` 1.15, i.e. Ubuntu 18.04; present from 20.04 on); (2) that real result
+  fed directly into answering the design question — old Linux reports the **truthy**
+  generic sentinel `application/octet-stream` for such files, which silently defeats
+  `getMediaType`'s own falsy-only fallback, meaning point 11's "strictly redundant" claim
+  from one round earlier was itself wrong at the boundary. Fixed by falling back to the
+  extension specifically when mediaType is that generic sentinel, while still trusting any
+  other concrete mediaType (`image/png` included) at face value. All three of these —
+  testing an adjacent real system instead of just researching the actual target, the
+  correction to point 11, and the generic-sentinel distinction — are now in
+  `tapestry-pr-conventions` as points 12 (strengthened) and 13. The checklist is up to 13
+  items now, and the skill says plainly that this is starting to be a lot to run carefully
+  every time — worth revisiting via consolidation rather than only ever appending, if it
+  keeps growing.
