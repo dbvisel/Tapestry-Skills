@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and four review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
+description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import) and five review rounds — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into, don't fallback where the primary signal is already reliable, fit the actual API surface instead of an assumed one — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -10,10 +10,11 @@ skill_discovery_hints:
   - keywords: ["comment discipline", "merge duplicate components", "composition over internal dependency"]
   - keywords: ["authoritative signal over derived guess", "mediaType vs file extension", "narrowing an existing pipeline's input space", "speculative dead code", "unused generality"]
   - keywords: ["pre-submission checklist", "self-review before PR", "empty review body", "gh pr view comments empty", "catch review feedback before opening a PR"]
+  - keywords: ["Blob vs File", "unnecessary type wrapping", "fallback only where needed", "check library API signature", "manufactured metadata unused filename"]
 last_verified: 2026-09-02
 ---
 
-What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across four
+What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across five
 real review rounds on two real PRs: [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
 skill's findings were first folded into before being generalized out here) and
@@ -35,7 +36,7 @@ below), not just consulted after a reviewer has already commented.
 - Replying to or resolving PR review comments via `gh`
 - Any skill in this repo whose checklist ends in "open a PR" should point here
 
-## What this reviewer actually asked for, verified across four rounds on two PRs
+## What this reviewer actually asked for, verified across five rounds on two PRs
 
 1. **Don't add a near-duplicate sibling next to an existing near-identical one — merge
    them and parameterize by whatever actually differs.** Round 1: a new `search-list/`
@@ -121,6 +122,31 @@ below), not just consulted after a reviewer has already commented.
    point 7's fix made the factory accept URL sources too. The lesson isn't "never
    generalize," it's "put the generalization at the point that actually needs it, not
    inside a helper whose own contract doesn't call for it."
+9. **Don't build a fallback path for an input branch that already has a fully reliable
+   primary signal.** PR #109, round 2, on the round-1 fix to point 6/7 above: *"This is
+   again too complicated, if the given mediaType is not heic, check the filename extension
+   only if the source is a File."* The round-1 fix had applied the extension-fallback to
+   *both* File and URL sources, deriving a filename from the URL's path just to have
+   something to check. But a URL source's `mediaType` always comes from the server's
+   content-type proxy — it doesn't get meaningfully less reliable the way a browser's
+   `File.type` can be empty — so a fallback for that branch was solving a problem that
+   doesn't occur. **"Again"** is the reviewer's own word: this is the same shape as point
+   8 (unused generality), but about a whole conditional branch's *behavior*, not dead code
+   in a helper — reserve fallback/defensive logic for the specific input branch where the
+   primary signal can genuinely be missing, not every branch uniformly.
+10. **Pass data in the loosest type the actual API accepts — don't wrap/reshape it to fit
+    an assumed stricter interface, and don't manufacture metadata nothing downstream
+    reads.** Same round, a second comment: *"Why are we creating a new file when the
+    heic-to module can accept a simple Blob? Also when then returned file from
+    convertHeicFile can have a random filename, it is not important, for example
+    converted.jpg."* The code wrapped a downloaded `Blob` in a `new File(...)` purely to
+    satisfy a `File`-typed parameter that turned out to be assumed, not required —
+    `heic-to`'s `heicTo({ blob, ... })` takes a plain `Blob`, and the "real" filename it
+    was being constructed to carry was never read by anything after conversion. Check the
+    library's actual signature before reshaping data to match a narrower type than it
+    needs, and don't thread a piece of information through a data structure just because
+    the type technically wants a name for it — a fixed placeholder (`converted.jpg`) is
+    fine when nothing consumes the value.
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -152,11 +178,29 @@ checkable without waiting for a live comment:
    the one you happened to test with (point 7).
 8. **Dead/speculative code** — does any logic handle an input shape nothing currently
    passes to it? Remove it; add it back only once a real caller needs it (point 8).
+9. **Uniform fallbacks** — if a fallback/defensive path is applied identically across
+   every branch of an input, check whether every branch actually needs it — a branch
+   with an already-fully-reliable primary signal doesn't need the same fallback as one
+   that doesn't (point 9).
+10. **Type-fitting** — does this wrap or reshape a value (e.g. a `Blob` into a `File`)
+    to satisfy a parameter type before checking whether the actual function called
+    needs the narrower type at all? Check the real signature first. Does it also
+    manufacture a piece of metadata (a filename, an id) that nothing downstream reads?
+    Drop it (point 10).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
 minutes of self-review. Every point above earned its place in this list by actually
 costing a round-trip once already.
+
+**First real test of this checklist, and what it showed**: points 9 and 10 above were
+themselves found in a round-2 review of the round-1 *fix* for points 6/7 — a fix made
+before this checklist existed. So this round wasn't run through the checklist before
+being pushed, and can't be claimed as either a confirmation or a failure of it yet; it's
+the reason points 9-10 exist at all. The real test is the next PR round pushed *after*
+a checklist pass — worth explicitly noting in that PR's own history whether the checklist
+caught something before review, or the reviewer still found something the checklist
+missed (in which case, add it here too).
 
 ## The real review-comment workflow
 

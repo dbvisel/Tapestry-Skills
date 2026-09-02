@@ -51,7 +51,7 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
-| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across four review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into — plus a pre-submission self-review checklist and the exact `gh`/GraphQL commands (with a real empty-review-body gotcha) for replying to and resolving PR review comments |
+| [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across five review rounds on two real PRs (#96, #109) — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one — plus a pre-submission self-review checklist and the exact `gh`/GraphQL commands (with a real empty-review-body gotcha) for replying to and resolving PR review comments |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -304,3 +304,16 @@ during review, in case future editors hit the same trap:
   `gh api .../pulls/<number>/comments`. An empty-body review reads like "nothing to
   address" if you stop there; it isn't. Not yet verified whether the checklist actually
   reduces round-trips on a real subsequent PR — that's the next thing to check.
+- The very next PR #109 round answered part of that, but not the way originally hoped:
+  round 2 landed on the round-1 *fix* itself (pushed before the checklist existed), so it
+  couldn't test the checklist at all — it just supplied two more real findings
+  (`tapestry-pr-conventions` points 9-10: don't apply a fallback path uniformly across
+  every input branch when only one branch's primary signal is actually unreliable; check
+  a library's real parameter type before wrapping data to fit an assumed stricter one, and
+  don't manufacture metadata nothing downstream reads). Both quoted verbatim from the
+  reviewer, one of them — *"This is again too complicated"* — using almost the same words
+  as round 1's underlying complaint, on a fix that itself over-corrected into new
+  unnecessary complexity. The actual test of whether the checklist reduces round-trips
+  still hasn't happened yet: it requires a PR pushed *after* running the checklist against
+  the diff, which this round wasn't. Whether that happens depends on there being a next
+  round to check it against.
