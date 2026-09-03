@@ -1,9 +1,9 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import), six review rounds, and one direct design question from the same reviewer outside GitHub — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its own boundary conditions), match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, and the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo
+description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import), six review rounds, and one direct design question from the same reviewer outside GitHub — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its own boundary conditions), match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
-depends_on: []
+depends_on: ["asd-ste100"]
 skill_discovery_hints:
   - keywords: ["PR review", "code review conventions", "pull request feedback", "tapestry-project PR"]
   - keywords: ["resolve review thread", "reply to PR comment", "gh api pulls comments", "GraphQL resolveReviewThread"]
@@ -11,7 +11,8 @@ skill_discovery_hints:
   - keywords: ["authoritative signal over derived guess", "mediaType vs file extension", "narrowing an existing pipeline's input space", "speculative dead code", "unused generality"]
   - keywords: ["pre-submission checklist", "self-review before PR", "empty review body", "gh pr view comments empty", "catch review feedback before opening a PR"]
   - keywords: ["Blob vs File", "unnecessary type wrapping", "fallback only where needed", "check library API signature", "manufactured metadata unused filename"]
-last_verified: 2026-09-02
+  - keywords: ["ASD-STE100", "Simplified Technical English", "comment writing style", "PR reply writing style", "reduce verbosity"]
+last_verified: 2026-09-03
 ---
 
 What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across six
@@ -312,6 +313,20 @@ substantive inline comment, with the same empty top-level body. Treat any empty-
 review — approving or not — as a prompt to go check inline comments, not as a sign
 there's nothing to address.
 
+## Writing style for comments and review replies
+
+**This is a standing project preference, not observed reviewer feedback** — unlike every
+numbered point above, no reviewer on this repo has asked for this; keep the two kinds of
+guidance distinct rather than implying the real gatekeeper demanded a writing standard.
+
+Whenever a comment survives the "core logic or complex math only" bar (point 4), and
+whenever writing PR review-reply text (the `gh api .../replies` messages this skill's
+workflow section covers), write it in ASD-STE100 (Simplified Technical English) style —
+see the `asd-ste100` skill for the actual rule set. In short: short sentences, active
+voice, one idea per sentence, no hedge-stacking, no nominalization. This doesn't relax
+point 4's bar for *whether* to comment at all — it constrains the *form* of whatever
+text actually gets written, code comment or review reply alike.
+
 ## Guardrails
 
 1. **This is observed behavior from one specific reviewer, now verified across two
@@ -339,6 +354,9 @@ there's nothing to address.
 7. See `tapestry-collection-imports` for the concrete PR (#96), and `tapestry-content-types`
    for PR (#109), that all of the above was verified against, including the actual code
    before/after each round of feedback.
+8. **Comment and reply text follows ASD-STE100 style (see `asd-ste100`) — but this is a
+   standing project preference, not something any reviewer here asked for.** Don't cite it
+   as reviewer feedback in a PR reply or elsewhere in this skill's "verified" framing.
 
 ## Bundled references
 
