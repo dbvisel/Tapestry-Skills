@@ -52,18 +52,39 @@ independently checked, it's marked as such.
 
 ## Verified facts (checked live against `commons.wikimedia.org`, 2026-09-03)
 
-- **`action=query&prop=imageinfo&titles=File:...&iiprop=url|mime|mediatype&format=json&origin=*`**
-  resolves a File: page to its direct file URL, MIME type, and MediaWiki's own
-  `mediatype` classification. Real confirmed `mediatype` values: `BITMAP` (a `.JPG`),
+- **`action=query&prop=videoinfo&titles=File:...&viprop=url|mime|mediatype|derivatives&format=json&origin=*`**
+  (or `prop=imageinfo`/`iiprop=` — same fields, minus `derivatives`, see below) resolves a
+  File: page to its direct file URL, MIME type, and MediaWiki's own `mediatype`
+  classification. Real confirmed `mediatype` values: `BITMAP` (a `.JPG`),
   `OFFICE` (a `.pdf`, with `mime: application/pdf` — the same OFFICE/PDF ambiguity
   `tapestry-external-media-sources` already documents from the Commons reference
   implementation), `VIDEO` (a `.ogv`, `mime: application/ogg`), `AUDIO` (a `.ogg`,
   also `mime: application/ogg` — confirming the same MIME-is-ambiguous, mediatype-
   disambiguates pattern for audio vs. video that the existing skill only previously
   showed for video).
+- **`prop=videoinfo`/`viprop=` is a strict drop-in superset of `prop=imageinfo`/`iiprop=`
+  — same fields for every file type, plus a `derivatives` array when requested.**
+  Confirmed live for an image, a PDF, a video, and an audio file: `videoinfo` returns
+  identical `url`/`mime`/`mediatype`/`user`/`thumburl` values to `imageinfo` for
+  non-timed-media files (`derivatives: []`), and for VIDEO/AUDIO files it additionally
+  lists real transcoded alternatives. **This matters because Commons' own video/audio
+  originals often aren't browser-playable**: a real `.ogv` file's `derivatives` included
+  WebM transcodes up to 1080p (`video/webm; codecs="vp9, opus"`); a real `.ogg` audio
+  file's `derivatives` included an MP3 alternative (`audio/mpeg`) alongside the Ogg
+  original. Modern browsers can't decode Ogg Theora video at all, and Safari can't decode
+  Ogg Vorbis audio — always request `videoinfo`/`derivatives` (not plain `imageinfo`) and
+  prefer a matching derivative over the raw original for VIDEO/AUDIO files.
+- **A non-null `thumburl` is not always a real, per-item thumbnail.** An audio file with
+  no waveform/cover Commons can generate returns a static, generic
+  `https://commons.wikimedia.org/w/resources/assets/file-type-icons/fileicon-<ext>.png` —
+  the same icon for every file of that extension, not real per-item art. Detect this by
+  checking whether the `thumburl`'s path starts with
+  `/w/resources/assets/file-type-icons/`, and treat it as "no real thumbnail" (null) for
+  UI purposes rather than hotlinking it.
 - **The Action API itself (`commons.wikimedia.org/w/api.php`) sends
   `access-control-allow-origin: *`** — confirmed via response headers. Client-side
-  metadata resolution is viable from a CORS standpoint.
+  metadata resolution is viable from a CORS standpoint (though see the rate-limiting
+  finding below for why this alone doesn't make client-side calls safe).
 - **`upload.wikimedia.org` (the actual file host) is a separate origin from the API
   host, and a third-party claim (not independently verified by us) says it does *not*
   send permissive CORS headers**, meaning a `fetch()` read of file bytes cross-origin

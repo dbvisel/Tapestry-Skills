@@ -1,6 +1,6 @@
 ---
 name: tapestry-external-media-sources
-description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Generalized from two real reference implementations on an unmerged, messy fork branch
+description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Openverse and Wikimedia Commons are now real, verified, non-fork implementations (asteasolutions/tapestry-project#112, covering image/audio for Openverse and image/video/audio/pdf for Commons) — including a real codec-compatibility gotcha (prefer Commons' WebM/MP3 transcodes over Ogg originals) and a rate-limiting-forces-server-side-proxying finding that goes beyond plain CORS
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,7 +8,9 @@ skill_discovery_hints:
   - keywords: ["import from URL", "wikimedia commons import", "openverse import", "resolve URL to media"]
   - keywords: ["File: page", "direct file URL", "hotlinkable URL", "media source resolver"]
   - keywords: ["item-factories.ts", "createMediaItem", "parseCommonsFileURL"]
-last_verified: 2026-08-12
+  - keywords: ["Ogg Theora WebM transcode", "Ogg Vorbis Safari", "Commons derivatives", "browser codec compatibility"]
+  - keywords: ["CORS present but rate limited", "burst rate limit", "429 concurrent requests", "server-side proxy required"]
+last_verified: 2026-09-03
 ---
 
 Checklist for letting users paste a URL from an external platform that describes a single
@@ -18,25 +20,34 @@ Example: pasting `https://commons.wikimedia.org/wiki/File:AmmoniteFossil.JPG` (a
 *about* an image) creates a normal `image` item pointing at the image's real, direct URL —
 not a `webpage` item, and not a new item type.
 
-Generalized from two real, complete reference implementations found in unmerged
-exploratory work on a personal fork — not present on any long-lived branch, so treat the
-patterns below as the durable artifact, not any particular branch they came from:
+Generalized from real implementations — one still a reference example from unmerged
+exploratory work on a personal fork, one now a real, non-fork implementation verified
+against the actual live external APIs and opened as a PR against actual upstream:
 
-- **Wikimedia Commons file import** — `core/src/wikimedia-commons.ts` +
-  `commonsFileItemFactory` in `client/src/stage/item-factories.ts`. Handles any Commons
-  media type this way, not just images — e.g.
-  `https://commons.wikimedia.org/wiki/File:3D_Model_Belly_Amphora.stl` resolves straight to
-  a `model3d` item (see step 2's mapping table) exactly as `AmmoniteFossil.JPG` resolves to
-  an `image` one.
-- **Openverse image import** — `core/src/openverse.ts` + `openverseImageItemFactory`, an
-  intentionally near-identical, simpler second example (images only, no ambiguous
-  media-type narrowing needed) — e.g.
+- **Openverse image/audio import** — `core/src/openverse.ts` +
+  `externalMediaFactory` in `client/src/stage/item-factories.ts` — real, verified, part of
+  [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
+  (open, unreviewed as of this writing). Handles both `/image/<uuid>` and `/audio/<uuid>`
+  page URLs (`OpenverseMediaType = 'image' | 'audio'`) — e.g.
   `https://openverse.org/image/6c17d9b6-7721-4d42-95e6-1d570cadae74?p=1` (the `?p=1` is just
   the search-results page the user came from and is correctly ignored — the parser matches
-  against the path alone).
+  against the path alone). Openverse's own API always returns the single best/original file
+  per item — there are no alternate-resolution derivatives to choose between, unlike
+  Commons below.
+- **Wikimedia Commons file import** — `core/src/wikimedia-commons.ts`, same
+  `externalMediaFactory`, same PR. **Real, live-verified `mediatype`-to-item-type mapping**
+  (via `action=query&prop=videoinfo&viprop=mediatype|mime`, confirmed against real Commons
+  files of each kind): `BITMAP`/`DRAWING` → `image`, `VIDEO` → `video`, `AUDIO` → `audio`,
+  `OFFICE` with `mime: application/pdf` → `pdf` (any other `OFFICE` file — DjVu, Word, plain
+  category pages — is unsupported and returns `null`, same as the Commons 3D-model mapping
+  below). A 3D-model mapping like
+  `https://commons.wikimedia.org/wiki/File:3D_Model_Belly_Amphora.stl` → `model3d` is not
+  part of #112 (only image/video/audio/pdf were asked for) but would follow the exact same
+  pattern if added later — see step 2's mapping table.
 
-**Neither exists on any current branch of `internetarchive/tapestry-project` or any default
-fork branch** — these are reference examples for this skill, not implemented features.
+`#112` is real, working code, verified end-to-end against the actual live Openverse and
+Commons APIs (not just read from their docs) — but it is **not yet merged or reviewed**.
+Don't tell a user Openverse/Commons single-file import is upstream and shipping.
 
 **Scope note**: both reference implementations also support a *bulk* variant (importing
 every file in a Commons category, or an Openverse tag search, via a picker dialog). That
@@ -91,6 +102,21 @@ surface Tapestries doesn't already have for any existing item type.
      may be CORS-enabled by default (Openverse's is) or may need a different opt-in
      mechanism, or may not support browser calls at all (in which case resolution needs to
      happen server-side instead — see the note at the end of this checklist).
+   - **CORS being present on a per-request basis does not mean client-side calls are
+     actually safe — check burst/rate-limit behavior too, separately.** Both Openverse
+     and Wikimedia Commons send permissive CORS headers on ordinary single requests, yet
+     both are unsafe to call directly from the browser: live-fired 20-25 concurrent
+     requests got a majority of `429`s from both (Openverse via Cloudflare
+     bot-mitigation — the challenge response carries no CORS header at all, which is what
+     actually surfaces as a confusing "CORS blocked" browser error; Commons via its own
+     gateway rate limiter — 9 of 20 came back `429`, a token-bucket-style limit, not a
+     clean cutoff). A scrolling collection picker (see `tapestry-collection-imports`)
+     produces exactly this request pattern. **Verify actual concurrent-request behavior
+     with a real burst test (a handful of parallel `curl`s), not just a single request's
+     response headers, before deciding client-side resolution is viable** — route
+     through the server-side proxy with caching if it isn't (see the note at the end of
+     this checklist either way, since collection browsing needs it regardless of what a
+     single-item lookup can get away with).
    - **Use small typed accessor helpers** (`asRecord`/`asString`/`asNumber`, navigating
      `unknown` JSON defensively) rather than casting the API response — same convention as
      `core/src/iiif.ts` (see `tapestry-content-types`). External platforms' JSON is not
@@ -124,11 +150,35 @@ surface Tapestries doesn't already have for any existing item type.
    falls through to whatever the next factory does with it — usually a generic webpage/link
    import — rather than blocking.
 3. **Prefer a better-suited derivative over "the original," if the platform offers
-   alternates.** Modern browsers can no longer decode Ogg Theora, an older but still common
-   Commons video codec — Commons' resolver checks for a transcoded WebM derivative and
-   returns the highest-resolution one instead of the original whenever one exists. If the
-   platform's API surfaces alternate renditions (transcodes, other resolutions), prefer the
-   most broadly compatible one over blindly taking "the first URL in the response."
+   alternates — verified real for both video and audio, not just a video-only concern.**
+   Modern browsers cannot decode Ogg Theora video. Safari cannot decode Ogg Vorbis audio
+   at all. Commons' `videoinfo` API (a superset of `imageinfo` that also reports
+   `derivatives` when requested via `viprop=derivatives`) confirmed live: a real Commons
+   video file offers WebM derivatives up to 1080p; a real Commons audio file offers an
+   MP3 derivative alongside the Ogg original. `core/src/wikimedia-commons.ts`'s
+   `bestPlaybackURL` picks the highest-resolution `video/webm` derivative for video, an
+   `audio/mpeg` derivative for audio, and falls back to the original only when no
+   matching derivative exists (an already-WebM source, or a file Commons never
+   transcoded). **This was found by manually testing an actual pasted video URL in a
+   real browser, not by reading API docs** — the failure mode (`getVideoItemSize` never
+   resolving, since the browser's `<video>` element never fires `loadedmetadata` for an
+   undecodable source) surfaces as a generic, unrelated-looking downstream error
+   (`item-batch-mutations` rejecting a `null` position/size), not an obvious "can't play
+   this video" message — verify real playback in a real browser for any video/audio
+   platform integration, not just that the resolved URL loads at the network level.
+
+   **A generic per-extension "we don't have a thumbnail" icon is not a real thumbnail —
+   detect and treat it as null.** Commons' own `thumburl` for audio files it can't
+   generate a waveform/cover for comes back as a static, generic
+   `/w/resources/assets/file-type-icons/fileicon-<ext>.png`, not a real per-item image.
+   Hotlinking it would show every audio item in a collection picker with the exact same
+   generic icon fetched from Commons, duplicating work the app's own icon fallback
+   already does better and more consistently. `thumbnailFor()` checks the `thumburl`'s
+   path against this known prefix and returns `null` instead, so the UI's own
+   null-thumbnail fallback (see `tapestry-collection-imports`) takes over uniformly.
+   Check for this same pattern on any platform whose thumbnail API might substitute a
+   generic placeholder rather than omitting the field entirely when it has nothing real
+   to offer.
 4. **`client/src/stage/item-factories.ts`** — new dedicated `ItemFactory`:
    ```ts
    const <platform>FileItemFactory: ItemFactory = async (source, _mediaType, tapestryId) => {
@@ -155,24 +205,31 @@ surface Tapestries doesn't already have for any existing item type.
    zero modification. This is the lightest of the three "URL connection" patterns for
    exactly that reason.
 
-**If the platform's API isn't browser-CORS-enabled**, resolution has to happen server-side
-instead of in the item factory: add the equivalent logic to a new function in
-`server/src/services/` (or extend `resolveWebSource`'s dispatcher — see
-`tapestry-content-types`'s step 6) rather than in `core/`, since `core/` code runs in the
-browser here. Both reference implementations happen not to need this (Wikimedia's and
-Openverse's public APIs are both directly callable from client code), so treat it as an
-exception to check for, not the default path.
+**Route through a server-side proxy by default, not only when CORS is missing.** The
+original framing here was that server-side resolution is an exception for the rare
+CORS-disabled platform. Real testing corrected that: both Openverse and Wikimedia Commons
+are CORS-enabled *and* both still need server-side proxying, because both rate-limit
+request bursts regardless of CORS (see the CORS bullet above) — a picker's scrolling
+behavior alone is enough to trigger it. `core/src/<platform>.ts`'s `fetch*` functions are
+still framework-free/pure (so they're callable from either side), but the actual runtime
+call path for both platforms is: client → the generic `proxy` REST resource
+(`server/src/resources/proxy.ts`, a `platform`-tagged discriminated union of operations
+shared across platforms — see `tapestry-collection-imports`' "Generalizing across
+multiple platforms in one PR" for the exact shape) → the `core/` fetch function, called
+server-side. **Treat direct client-side calls to an external platform's API as something
+to justify with a real burst test, not the default** — CORS headers alone don't prove
+it's safe.
 
 ## Design consideration: import-by-reference vs. a real copy
 
-**Both reference implementations import "by reference": the created item's `source` is set
+**Every implementation here imports "by reference": the created item's `source` is set
 to the external platform's own hosted URL** (Commons' hotlinked file, Openverse's
 third-party-hosted image), not a copy uploaded into Tapestries' own S3/MinIO storage the way
 a dragged-and-dropped local file is (see `tapestry-server-worker`'s S3 section for that
 presigned-upload flow). This is a real product/design tradeoff, not a settled default to
 copy without thinking about it:
 
-- **By reference** (what both reference implementations do): fast, no storage cost, always
+- **By reference** (what both real implementations do): fast, no storage cost, always
   reflects the live external asset — but breaks if the source platform deletes/moves the
   file, is subject to that platform's own hotlinking/rate-limit/CORS policies indefinitely,
   and isn't actually archived by Tapestries.
@@ -187,6 +244,15 @@ copy without thinking about it:
 **Ask which behavior is wanted** before assuming "by reference" is fine just because that's
 what the existing examples do — for an archival project in particular, "the link rotted" is
 a real, not hypothetical, failure mode.
+
+**By-reference means the resolved URL is often not the URL the user recognizes — record
+the original in `notes`.** Confirmed real for both platforms: an Openverse page resolves
+to a third-party host (e.g. `rawpixel.com`), a Commons `File:` page resolves to
+`upload.wikimedia.org` — a user later inspecting the item sees an unfamiliar host with no
+way to trace it back. Fix, applied to both platforms: set the created item's `notes` to
+`` `Source: ${url}` ``, where `url` is the actual page the user pasted. See
+`tapestry-collection-imports` for the bulk-picker-path variant of this same fix (no
+per-item pasted URL exists there, so it reconstructs a canonical link instead).
 
 ## Guardrails
 
@@ -208,3 +274,13 @@ a real, not hypothetical, failure mode.
 7. See `tapestry-content-types` for the `core/` module conventions (defensive JSON
    accessors) this pattern also follows, and `tapestry-webpage-types` for the closely
    related "recognize a URL, do something special" family this sits alongside.
+8. **Record the originally-pasted URL in `notes`** when the resolved `source` points
+   somewhere the user won't recognize (see the design-consideration section above).
+9. **CORS headers on a single request don't prove client-side calls are safe** — check
+   burst/concurrent-request behavior with a real test before skipping the server-side
+   proxy. Route through it by default for any platform with real user traffic.
+10. **For video/audio platforms, check for and prefer a browser-compatible derivative**
+    (a transcode) over the platform's "original" file, and verify actual playback in a
+    real browser — a network-level "the URL loads" check is not the same as "the browser
+    can decode this," and the failure surfaces as an unrelated-looking downstream error,
+    not an obvious codec message.

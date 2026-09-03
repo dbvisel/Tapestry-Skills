@@ -359,6 +359,16 @@ signal to watch for going forward — the former means "run it more carefully ne
 the latter means "add a new point," and both are useful, but only the former would mean
 the checklist itself has a gap.
 
+**A third data point, from a different PR (#112, Openverse + Wikimedia Commons import)**:
+running the checklist against the full diff before opening the PR caught a real point-1
+violation self-review, with no reviewer involved at all — `createOpenverseMediaItems`
+and `createWikimediaMediaItems` were ~90% identical, differing only in whether
+`mediaType` was a fixed value or a per-item field, and got merged into one
+`createExternalMediaItems` before the PR was ever opened. This is the checklist doing
+exactly the job it was built for: catching a point-1-shaped issue pre-review instead of
+paying for it as a round-trip, on a PR where — unlike #109 — the checklist was run
+proactively from the start rather than reconstructed after the fact.
+
 **A growing list is itself worth watching**: this checklist is now 17 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
 correct for keeping it evidence-based, but a 17-item self-review pass risks becoming too

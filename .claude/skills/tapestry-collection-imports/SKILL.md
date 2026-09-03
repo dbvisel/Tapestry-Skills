@@ -1,6 +1,6 @@
 ---
 name: tapestry-collection-imports
-description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, generalized from reference implementations plus one real (non-fork) implementation against actual upstream — IA search, via an open PR
+description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, now generalized from three real (non-fork) implementations against actual upstream, each via an open PR — IA search (#96), and Openverse plus Wikimedia Commons together in one PR (#112) that deliberately shares plumbing across both platforms — plus real, live-verified gotchas (a shared-component "clears the list on any failure" bug, cursor-based vs. numeric pagination, per-item media type dispatch for mixed-type collections)
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-external-media-sources"]
@@ -9,6 +9,10 @@ skill_discovery_hints:
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
   - keywords: ["import-items-list", "LazyList", "MAX_SELECTION"]
   - keywords: ["pendingRequests", "DoingWorkIndicator", "hourglass indicator", "slow confirm button", "no loading feedback"]
+  - keywords: ["LazyListLoader total mismatch", "list clears itself", "picker items disappear", "full reload on total change"]
+  - keywords: ["cursor pagination", "gcmcontinue", "WikimediaCursorStore", "opaque cursor vs page number"]
+  - keywords: ["mixed media type collection", "per-item media type", "ExternalCollection", "platform-tagged union"]
+  - keywords: ["generalize two platforms one PR", "shared proxy dispatch", "external-media proxy operation"]
 last_verified: 2026-09-03
 ---
 
@@ -24,30 +28,34 @@ anywhere; it only drives the picker.
 `IAImport`, and the whole `import-items-list/` component tree already exist on
 `internetarchive/tapestry-project` `main` with real commit history (code review, bug fixes),
 originally built for Internet Archive collections and playlists. **This skill is about
-extending that mechanism with a new collection type**, generalized from three example
-extensions of exactly this kind:
+extending that mechanism with a new collection type**, generalized from three real (not
+fork-only) extensions of exactly this kind, all built against actual upstream and opened as
+real PRs:
 
-- **Wikimedia Commons categories** — `https://commons.wikimedia.org/wiki/Category:Fossil_forgeries`
-  — still only a reference implementation, found in unmerged exploratory work on a personal
-  fork, not present on any long-lived branch.
-- **Openverse tag collections** — `https://openverse.org/image/collection?tag=Aztec` — same
-  status as Commons: fork-only reference, not upstream.
 - **Internet Archive search queries** — `https://archive.org/search?query=subject%3A%22Gondavalekar%22`
-  — **this one is no longer just a reference implementation.** As of 2026-08-18 it was built
-  as a real `IASearchCollection` addition against actual upstream and opened as a PR
-  ([asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)).
-  As of 2026-08-21 **it's been through two real review rounds (2026-08-20, 2026-08-21),
-  both fully addressed and resolved, still open/unmerged** — see "Real PR review feedback"
-  below for exactly what each reviewer round asked for; treat those as corrections to how
-  this skill described the implementation, not just history. It's the source of most of
-  the gotchas below, since it was the first case where the *new* collection type had no
+  — built as `IASearchCollection`, opened as
+  [asteasolutions/tapestry-project#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+  (2026-08-18), through two real review rounds (2026-08-20, 2026-08-21), both fully
+  addressed and resolved, still open/unmerged as of this writing. See "Real PR review
+  feedback" below for exactly what each round asked for. It's the source of most of the
+  early gotchas below, since it was the first case where the *new* collection type had no
   single representative IA item (a category/playlist resolves to one IA item's metadata
   first; a raw search query never does).
+- **Openverse tag/source collections** — `https://openverse.org/image/collection?tag=Aztec`,
+  `https://openverse.org/image/collection?source=spacex` — and **Wikimedia Commons
+  categories** — `https://commons.wikimedia.org/wiki/Category:Fossil_forgeries` — built
+  together as one `ExternalCollection` member covering both platforms (plus their
+  single-file counterparts, image/audio/video/PDF), opened as
+  [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
+  (2026-09-03), not yet reviewed as of this writing. Unlike #96, this PR deliberately
+  generalizes across *two* platforms at once — see "Generalizing across multiple platforms
+  in one PR" below for the design that resulted, and the "Real, live-verified bugs" section
+  for what manual testing (not yet reviewer feedback) turned up before the PR was opened.
 
-**So as of 2026-08-18, only `IACollection` (a literal IA collection/identifier),
-`IAPlaylist`, and (pending merge) `IASearchCollection` exist upstream** — Commons categories
-and Openverse tag collections don't yet. Don't tell a user Commons/Openverse bulk import
-already works; use this skill as the template for adding those.
+**So as of this writing, `IACollection`, `IAPlaylist` (long-standing upstream), and
+`IASearchCollection`/`ExternalCollection` (open, unmerged PRs) are the only collection
+types this mechanism actually handles.** Don't tell a user Commons/Openverse bulk import is
+merged and shipping — it's real, working code in an open PR, not yet upstream.
 
 This skill pairs with `tapestry-external-media-sources`, which covers the single-item case
 for the same platforms (one Commons file, one Openverse image). A collection type's picker
@@ -177,6 +185,176 @@ the picker UI.
    (including `IACollection`/`IAPlaylist`). Don't introduce a per-type selection cap; if a
    cap needs to change, change the shared constant and accept that it now applies to every
    existing collection type too.
+
+## Generalizing across multiple platforms in one PR
+
+PR #112 added two platforms (Openverse, Wikimedia Commons) in one PR, on purpose, so it
+had to answer a question #96 never faced: how much should two collection types actually
+share? The answer that came out of building it for real — verified by whether the two
+platforms' real APIs actually support a common shape, not decided upfront — split cleanly
+into "shares" and "stays separate":
+
+**Shares across platforms** (the same shape held for both, verified, not assumed):
+
+- **One `IAImport` union member, not one per platform.** Instead of an
+  `OpenverseCollection` member and a separate `WikimediaCommonsCollection` member, both
+  collapse into one `ExternalCollection` member: `{ type: 'ExternalCollection'; total:
+  number } & ({ platform: 'openverse'; mediaType: OpenverseMediaType; collection:
+  OpenverseCollectionQuery } | { platform: 'wikimedia-commons'; collection:
+  WikimediaCollectionQuery })` — a nested discriminated union on `platform` inside the
+  one outer `type`. This means `IA_IMPORT_TITLE_MAP`/`IA_IMPORT_CLASS_MAP`/the list
+  dispatcher/`createNewItems` each need only one `type === 'ExternalCollection'` branch
+  (with an inner `platform` switch), not one branch per platform — a real reduction in
+  the four-integration-points surface a third platform would otherwise add to.
+- **One generalized proxy operation set, not one per platform.** The three proxy
+  operations a collection type needs (fetch one item, cheap count, paginated results)
+  became `external-media` / `external-collection-count` / `external-collection-results`,
+  each carrying a `platform`-tagged nested union for its payload, instead of
+  `openverse-media`/`openverse-collection-count`/`openverse-collection-results` plus a
+  parallel `wikimedia-*` trio. A third platform extends these three existing operations
+  (one more arm on each nested union) instead of adding three new top-level ones.
+- **One picker list/details component, not one per platform** — see
+  `client/src/components/handle-ia-import-dialog/import-items-list/external-collection-list/`.
+  Parameterized by `platform` for the bits that genuinely differ (which detail columns to
+  show: Openverse has Creator+License already fetched; Commons only has the free
+  `user`/uploader field — showing "License" for Commons would need a separate, heavier
+  `extmetadata` API call nothing has asked for yet, so it's just not shown).
+- **Only add a real generic abstraction (a `Platform` type, a registry array) once a
+  second real platform exists to prove the shape against** — there was no such
+  abstraction anywhere in the codebase before #112, deliberately: inventing one for
+  exactly one platform (Openverse alone) would have been guessing at a shape with no
+  second data point to check it against.
+
+**Stays separate per platform** (the two platforms' real API mechanics genuinely differ):
+
+- **`core/src/<platform>.ts` stays one module per platform.** No shared base
+  interface/adapter was introduced at this layer — each module's `parse*`/`fetch*`
+  functions are independent, matching the pre-existing per-source convention (IA has
+  its own module too). The `externalMediaFactory` in `item-factories.ts` tries each
+  platform's parsers in sequence inside one function, rather than a registry loop over a
+  generic adapter array — for exactly two platforms, a formal adapter interface bought
+  nothing a plain sequence of `if` branches didn't already give, at real TypeScript
+  ceremony cost. Revisit this specific call if a third platform arrives.
+- **Pagination mechanics are not the same shape, and forcing them to look the same
+  would have been fake generalization.** Openverse's real pages are independently
+  addressable by number (`fetchOpenverseCollectionPage(mediaType, collection, page,
+  pageSize)` — pure, stateless, page-in/page-out). Wikimedia Commons categories paginate
+  with an **opaque cursor** (`gcmcontinue`), confirmed live: there is no way to jump
+  directly to page 5 without first knowing page 4's cursor, unlike Openverse's `page=N`.
+  The fix that keeps both platforms behind the same external contract
+  (`fetchXCollectionResults(query, page, pageSize, signal) -> {total, results}`) without
+  papering over the real difference: `fetchWikimediaCollectionResults` takes an injected
+  `WikimediaCursorStore` (`{ get(realPage): Promise<string|null|undefined>;
+  set(realPage, cursor): Promise<void> }`) — the pure walking algorithm (which real pages
+  the requested window spans, walk forward from the first not-yet-known one) lives in
+  `core/` and is testable without I/O; the real Redis-backed store (namespaced per
+  category, no TTL since a discovered cursor never goes stale) is wired by
+  `server/src/resources/proxy.ts`, which is where Redis access belongs anyway. **This
+  cursor-store-as-injected-dependency shape is the reusable pattern for any future
+  platform whose collection API also paginates by opaque cursor rather than page
+  number** — don't try to force it through the same page-remapping math Openverse uses.
+- **A collection is not always scoped to one media type — check the platform's real
+  behavior, don't assume Openverse's shape generalizes.** Openverse's URL scheme scopes
+  a collection query to exactly one media type (`/image/collection?tag=X` vs.
+  `/audio/collection?tag=X` — results only ever come from one endpoint). A Wikimedia
+  Commons category has no such scoping: a single category can genuinely mix images,
+  PDFs, video, and audio (verified live — a real, moderately-sized Commons category
+  mixed all four in one listing). This means `mediaType` lives at two different levels
+  depending on platform: a fixed field on the `ExternalCollection` IAImport member for
+  Openverse, versus a per-item field on each Commons result. The list component reads
+  whichever is actually available (`'mediaType' in item ? item.mediaType :
+  collection.mediaType`, narrowing on whether the item shape itself carries the field)
+  rather than assuming one mediaType per collection everywhere. **If you add a platform
+  whose collections can mix types, give every listed item its own `mediaType` field
+  rather than trying to fit it into a single collection-level type** — it's the only way
+  the shared per-item rendering/selection/creation logic stays correct for a mixed list.
+
+### Adding a third platform (e.g. Flickr, Sketchfab, Internet Archive media)
+
+The shape above was built and verified against exactly two platforms. Extending it to a
+third means **extending the existing shared unions, not adding parallel top-level ones**:
+
+1. `core/src/<platform>.ts` (new, separate module — see `tapestry-external-media-sources`
+   for the single-item resolver conventions this follows). Decide pagination shape first,
+   since it drives the rest: numeric (`fetchXCollectionPage(query, page, pageSize)`, pure)
+   if the platform's API supports jumping to an arbitrary page directly, or the
+   `WikimediaCursorStore`-style injected-dependency shape if it only exposes an opaque
+   continuation token.
+2. Add one more arm to the *existing* nested `platform`-discriminated unions — do not add
+   new top-level members/operations:
+   - `ExternalMediaQuery`/`ExternalCollectionQuery` and their Zod schemas
+     (`shared/src/data-transfer/resources/{dtos,schemas}/proxy.ts`).
+   - The `ExternalCollection` `IAImport` member's nested union
+     (`client/src/pages/tapestry/view-model/index.ts`).
+3. `server/src/resources/proxy.ts` — one more `query.platform === '<platform>'` branch in
+   each of the three existing `switch` cases (`external-media`,
+   `external-collection-count`, `external-collection-results`). Assume rate-limiting
+   until a real burst test proves otherwise (see `tapestry-external-media-sources`) — call
+   the new platform's `fetch*` functions from here, not from the client.
+4. `client/src/lib/external-media.ts` — one more pair of thin, platform-specific,
+   *typed* wrapper functions (kept separate per platform on purpose, even though the wire
+   protocol is shared, so call sites don't have to narrow a union themselves).
+5. `client/src/stage/item-factories.ts`'s `externalMediaFactory` — one more sequential
+   parse-attempt block (try the new platform's single-item parser, then its collection
+   parser) inside the existing function. Still not a registry/adapter array for three
+   platforms — reconsider that specific call only if a fourth arrives and the sequential
+   `if` chain has become genuinely hard to follow.
+6. `ExternalCollectionList`/`ExternalCollectionImportDetails`
+   (`import-items-list/external-collection-list/`, `import-details/index.tsx`) — one more
+   `platform === '<platform>'` branch wherever behavior differs (detail columns, the
+   empty-placeholder noun, the collection label). **These are plain conditionals, not
+   type-checked** — the same "verify by hand" caveat as the four-integration-points
+   gotcha above now applies per-platform-branch, not just per-collection-type.
+7. Decide per-item vs. collection-level `mediaType` based on the *new* platform's real
+   behavior (does one collection ever mix types?), by-reference vs. real copy, and
+   whether resolved URLs need the `notes: Source: <url>` treatment — don't assume any of
+   these from how Openverse or Commons happened to work.
+
+## Real, live-verified bugs (found via manual testing before any reviewer round, PR #112)
+
+- **A shared component you didn't write can silently break your new collection type in a
+  way that has nothing to do with your own code.**
+  `client/src/components/lazy-list/lazy-list-loader.ts`'s `LazyListLoader` — used by
+  every collection type's list, not just new ones — does a full **destructive reload**
+  (replaces the entire displayed `data` array) whenever a newly-fetched page's `total`
+  differs from what it already has, **and** on every one of its own periodic background
+  reloads (default every 10 seconds) regardless of success or failure. Re-deriving
+  `total` from each page's own (sometimes-failing) response, the way the initial
+  Openverse implementation did, made a single rate-limited/failed fetch report `total: 0`
+  — which LazyListLoader read as "the list changed," triggering a full reload that
+  visibly cleared the picker, immediately followed by more requests past what should have
+  been the end (since `total` flapping between the real count and `0` also breaks
+  LazyListLoader's own "have we loaded everything" check). **Fix: always report the
+  count fetched once up front (already known — it's the same `total` already sitting on
+  the `ExternalCollection` IAImport member) as a fixed value on every single page
+  request, never re-derived from a per-page response that can fail.** This is a real
+  trap for any future collection type built on `LazyList`/`LazyListLoader`, not specific
+  to Openverse or Commons — if your `requestItems` callback's `total` can vary at all
+  between calls for reasons unrelated to the list actually changing size, expect the
+  list to periodically self-destruct.
+- **Even with a stable `total`, `LazyListLoader`'s own periodic reload can still flash the
+  list to empty on a transient failure** — `doReload` unconditionally replaces `data`
+  with whatever the new fetch returns, with no "keep the old data if this fetch failed"
+  path. Both Openverse (Cloudflare bot-mitigation on request bursts) and Wikimedia Commons
+  (a real, live-confirmed burst rate limit: 9 of 20 concurrent unauthenticated requests
+  came back `429`) rate-limit exactly the kind of request pattern a scrolling picker
+  produces. **Fix: retry a fetch a few times with a real delay before ever reporting
+  failure to `LazyListLoader`** (`external-collection-list/index.tsx`'s
+  `fetchPageWithRetry` — 3 attempts, 4 seconds apart, aborting cleanly if the request is
+  superseded), spaced to outlast the server-side proxy's own short failure-cache time
+  (see the caching gotcha below). This doesn't fix a truly sustained outage, but it
+  absorbs the common case (a transient burst-limit hit) without ever surfacing a visible
+  glitch.
+- **A cached fetch failure must not get the same cache lifetime as a cached success.**
+  The server-side proxy caches `external-collection-results` responses (necessary — see
+  the rate-limiting above); the first version cached a failed fetch (`null`) for the
+  same 300-second duration as a real result, so one transient rate-limit hit blocked
+  every retry, from every requester, for the next 5 minutes. Fixed with a much shorter
+  (10s) TTL specifically when the cached value represents a failure — the exact same
+  `ttl: (value) => ...`-as-a-function pattern this codebase's WBM search cache already
+  used for a different "cache empty/failed responses for less time" case, one worth
+  reusing whenever a cache's `generate()` function can produce a "this attempt failed"
+  sentinel value.
 
 ## Real gotchas from the reference implementations
 
@@ -345,6 +523,20 @@ wanted** rather than assuming "by reference" is fine just because that's what th
 examples do — for an archival project in particular, "the link rotted" is a real, not
 hypothetical, failure mode.
 
+**By-reference import has a real, user-noticed gap: the resolved direct-file URL is often
+not the URL the user actually pasted or recognizes.** Confirmed for both Openverse (an
+`openverse.org` page resolves to a third-party host, e.g. `rawpixel.com`) and Wikimedia
+Commons (a `/wiki/File:...` page resolves to `upload.wikimedia.org`). A user later
+inspecting the item saw an unfamiliar host and had no way to find where they'd actually
+gotten it from. **Fix, applied uniformly across both platforms and both the single-item
+and bulk-picker paths: set the created item's `notes` field to `` `Source: ${url}` ``**,
+where `url` is the page the user actually pasted (single-item path) or a reconstructed
+canonical link back to that specific item's page (bulk path, where there's no per-item
+pasted URL — Openverse rebuilds it from `(mediaType, id)`; Commons rebuilds a short
+`?curid=<pageId>` link, which sidesteps re-encoding a title that may contain unicode,
+spaces, or punctuation). Apply this to any future by-reference resolver whose resolved
+URL can differ from what the user recognizes.
+
 ## Guardrails
 
 1. **The picker mechanism (`HandleIAImportDialog`, `IAImport`, `import-items-list/`) is real
@@ -375,3 +567,20 @@ hypothetical, failure mode.
    `tapestry-server-worker` for the S3 upload flow relevant to the "real copy" alternative
    above. See `tapestry-pr-conventions` for the review norms observed on this PR that
    generalize well beyond collection imports specifically.
+10. **A `requestItems` callback's `total` must be a fixed value, never re-derived from a
+    per-page response that can fail.** `LazyListLoader` treats any change in `total` as
+    "the list changed" and does a full destructive reload — see "Real, live-verified
+    bugs" above. Report the count already fetched once up front, on every call.
+11. **When adding a platform to an existing multi-platform collection type, extend the
+    shared `platform`-tagged unions (the `IAImport` member, the proxy operations) rather
+    than adding new parallel top-level members/operations** — see "Generalizing across
+    multiple platforms in one PR" above. Only reach for a genuinely separate `core/`
+    module per platform, not a shared one, since the real API mechanics (pagination
+    shape especially) are the part that's actually allowed to differ.
+12. **Don't assume a collection is scoped to one media type** — verify the platform's
+    real behavior. If it can mix types, give every listed item its own `mediaType`
+    field rather than a single collection-level one.
+13. **Retry a rate-limited/failed fetch a few times before reporting failure upward**,
+    spaced past the server-side cache's own failure TTL, rather than letting a single
+    transient hit propagate into a visible glitch — and give a cached failure a much
+    shorter TTL than a cached success.

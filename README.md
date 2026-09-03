@@ -47,13 +47,11 @@ separate from the `tapestry-project` checkout it operates on.
 | [`tapestry-auth-providers`](.claude/skills/tapestry-auth-providers/SKILL.md) | Adding a new external login provider — full client+server+schema+deployment checklist, generalized from two real (unmerged) reference implementations: ORCID and MediaWiki OAuth |
 | [`tapestry-content-types`](.claude/skills/tapestry-content-types/SKILL.md) | Adding a new canvas content/item type while changing as little as possible — full checklist including the easy-to-miss export-version bump, generalized from two real (unmerged) reference implementations: IIIF deep-zoom images and STL 3D models — plus a variation for an *existing* type accepting a format that needs conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real, competing PRs (HEIC image import) |
 | [`tapestry-webpage-types`](.claude/skills/tapestry-webpage-types/SKILL.md) | Adding a new *known webpage type* (recognizing a specific site's URLs) without adding a whole new item type — two strategies, embed-and-iframe or fetch-and-render-as-DOM, generalized from four real (unmerged) reference implementations: SoundCloud, Spotify, Sketchfab, and Wikipedia |
-| [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Generalized from two real (unmerged) reference implementations: Wikimedia Commons and Openverse single-file import |
-| [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query — generalized from reference implementations plus one real, currently-in-review implementation against actual upstream (IA search, [PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) |
+| [`tapestry-external-media-sources`](.claude/skills/tapestry-external-media-sources/SKILL.md) | Letting users paste a URL that *describes* a single file on an external platform (e.g. a Wikimedia Commons `File:` page) and importing the real file as a plain, ordinary item of an existing type — no schema changes at all, the lightest of the "URL connection" patterns. Openverse (image/audio) and Wikimedia Commons (image/video/audio/pdf) are now real, verified implementations, [PR #112](https://github.com/asteasolutions/tapestry-project/pull/112) — including a real browser-codec-compatibility gotcha (prefer WebM/MP3 transcodes over Ogg originals) and a "CORS alone doesn't mean safe for bursts" finding |
+| [`tapestry-collection-imports`](.claude/skills/tapestry-collection-imports/SKILL.md) | Extending Tapestries' existing bulk-import picker (real upstream functionality) with a new collection type — a Wikimedia Commons category, an Openverse tag/source search, an Internet Archive search query — generalized from two real, currently-unmerged implementations against actual upstream: IA search ([PR #96](https://github.com/asteasolutions/tapestry-project/pull/96)) and Openverse+Wikimedia Commons together in one PR ([PR #112](https://github.com/asteasolutions/tapestry-project/pull/112)), including what genuinely generalizes across platforms vs. what has to stay separate (cursor vs. numeric pagination), a shared-component "clears itself on any failure" bug, and a concrete recipe for adding a third platform |
 | [`tapestry-viewer-embedding`](.claude/skills/tapestry-viewer-embedding/SKILL.md) | Packaging the real, existing standalone `/viewer` app for a host that isn't a website — build with `--base=./`, serve over a real http(s) origin (never `file://`), point it at `?source=<url>` unmodified — generalized from two real (unmerged) reference integrations: a WordPress block and a macOS drag-and-drop opener |
 | [`tapestry-standalone-viewer`](.claude/skills/tapestry-standalone-viewer/SKILL.md) | A specialization of `tapestry-viewer-embedding` for the "one app, one fixed tapestry" case: a bundled script packages the standalone `/viewer` build together with one specific `.zip` into a self-contained static folder — no CORS setup, since the zip ships same-origin with the viewer, and (optionally, with a documented trade-off) no visible `?source=` param either |
 | [`tapestry-pr-conventions`](.claude/skills/tapestry-pr-conventions/SKILL.md) | Code-review conventions actually observed from a real maintainer, now verified across six review rounds on two real PRs (#96, #109) plus one direct follow-up question from the same reviewer — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its boundary conditions), match the full input space of the pipeline you're plugging into, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist, the exact `gh`/GraphQL commands (with a real empty-review-body gotcha), and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and PR replies |
-| [`asd-ste100`](.claude/skills/asd-ste100/SKILL.md) | Vendored from an external repo ([danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill), MIT) — rewrites English text into short, single-meaning, active-voice sentences per the ASD-STE100 (Simplified Technical English) standard. Referenced by `tapestry-pr-conventions` for code-comment and PR-reply writing style; not authored in or verified against this project |
-| [`tapestry-wikimedia-reference`](.claude/skills/tapestry-wikimedia-reference/SKILL.md) | Not a Tapestry pattern itself — an index pointing to [fuzheado/Wikipedia-AI-Skills](https://github.com/fuzheado/Wikipedia-AI-Skills) (a larger, unaffiliated Wikimedia/Wikipedia skills repo) for future Commons/Wikipedia work, plus real facts about the Commons Action API (`imageinfo`, `categorymembers`/`categoryinfo`, `mediatype` values, CORS, and confirmed live rate-limiting behavior) verified independently rather than taken from that repo at face value |
 
 ### Standalone `.zip` tooling (no `tapestry-project` checkout needed at all)
 
@@ -61,6 +59,17 @@ separate from the `tapestry-project` checkout it operates on.
 |---|---|
 | [`tapestry-zip-authoring`](.claude/skills/tapestry-zip-authoring/SKILL.md) | Constructing a valid tapestry export/import `.zip` from scratch — the full `root.json` schema and file-naming convention, plus a bundled, dependency-free builder script. **Does not require a `tapestry-project` checkout** — verified directly against the real app's schema/import behavior rather than derived from reading its source |
 | [`tapestry-zip-analysis`](.claude/skills/tapestry-zip-analysis/SKILL.md) | Analyzing an existing tapestry `.zip` — version, item inventory, groups/rels/presentation structure, and whether it's actually importable — via a bundled, dependency-free analyzer script. **Does not require a `tapestry-project` checkout**; depends on `tapestry-zip-authoring` for the schema reference, not on the app's source |
+
+### Reference material (pointers and verified facts, not Tapestry-specific patterns)
+
+Not checklists for building something in `tapestry-project` — these exist to be
+consulted by other skills (or directly) for writing-style rules and external-API facts
+that would otherwise get re-derived or re-verified every time they come up.
+
+| Skill | Covers |
+|---|---|
+| [`asd-ste100`](.claude/skills/asd-ste100/SKILL.md) | Vendored from an external repo ([danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill), MIT) — rewrites English text into short, single-meaning, active-voice sentences per the ASD-STE100 (Simplified Technical English) standard. Referenced by `tapestry-pr-conventions` for code-comment and PR-reply writing style; not authored in or verified against this project |
+| [`tapestry-wikimedia-reference`](.claude/skills/tapestry-wikimedia-reference/SKILL.md) | Not a Tapestry pattern itself — an index pointing to [fuzheado/Wikipedia-AI-Skills](https://github.com/fuzheado/Wikipedia-AI-Skills) (a larger, unaffiliated Wikimedia/Wikipedia skills repo) for future Commons/Wikipedia work, plus real facts about the Commons Action API (`imageinfo`/`videoinfo`, `categorymembers`/`categoryinfo`, `mediatype` values and real video/audio transcode `derivatives`, CORS, and confirmed live rate-limiting behavior) verified independently rather than taken from that repo at face value |
 
 ## Using these skills
 
@@ -350,3 +359,38 @@ during review, in case future editors hit the same trap:
   items now, and the skill says plainly that this is starting to be a lot to run carefully
   every time — worth revisiting via consolidation rather than only ever appending, if it
   keeps growing.
+- A later PR round added points 14-17 from a second real reviewer (`Sachanski`, joining
+  `zmarinov-astea` on the same PR #109) — colocate a small one-off helper with its
+  siblings in an existing file rather than a new one-function file; prefer sniffing a
+  file's actual content (`fileTypeFromBlob`, an already-installed dependency) over any
+  metadata/extension heuristic, which superseded the entire points 6/9/11/13 chain in one
+  step (none of us, across two reviewers and four rounds arguing about which weaker
+  signal to trust, had checked whether a stronger one — the file's own bytes — was
+  already available); drop an explicit return type TypeScript would infer anyway; and a
+  narrow exception to the "no comments" bar (a TODO is fine when a reviewer explicitly
+  asks for exactly that, on a separate PR, #96). The checklist ran against its own
+  duplication point (1) again on a *different* PR before that PR was even opened —
+  `tapestry-pr-conventions`' "How this checklist has actually fared" section below now
+  tracks three separate PRs' worth of evidence, not just #109's.
+- `tapestry-external-media-sources` and `tapestry-collection-imports` both went from
+  "fork-only reference implementation" to real, verified, non-fork code in the same
+  session, opened as [PR #112](https://github.com/asteasolutions/tapestry-project/pull/112)
+  covering Openverse and Wikimedia Commons together. Unlike #96/#109 (one platform each),
+  this PR deliberately built two platforms at once specifically to answer "how much
+  should this generalize" with real evidence instead of a guess — the answer (share the
+  proxy dispatch shape, the `IAImport` member, and the picker UI; keep each platform's
+  `core/` module separate since pagination mechanics genuinely differ) is now its own
+  section in `tapestry-collection-imports`, including a concrete recipe for a third
+  platform. Real bugs found by the user's own manual testing before any reviewer looked
+  at it: Commons video/audio not decoding in real browsers (Ogg Theora/Vorbis — fixed by
+  preferring Commons' own WebM/MP3 transcodes, confirmed live rather than assumed from
+  the format name); a cached fetch failure blocking every retry for the full cache
+  duration; and a shared `LazyListLoader` component (used by every collection type, not
+  just these two) that does a full destructive reload whenever a reported `total`
+  changes — re-deriving `total` from a possibly-failing per-page response made the
+  picker's own item list periodically clear itself, a trap any future collection type
+  built on the same shared component could fall into just as easily. The picker's
+  confirm button also turned out not to get `tapestry-content-types`' "free hourglass
+  indicator" — that guarantee only covers the drop/paste pipeline, a real gap in an
+  already-shipped skill, not something specific to this PR, now corrected in both
+  places.
