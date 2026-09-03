@@ -12,7 +12,7 @@ skill_discovery_hints:
   - keywords: ["client-side vs server-side conversion", "lazy load dependency", "code splitting", "bundle size", "moduleResolution subpath exports"]
   - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
   - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -492,7 +492,11 @@ out here deliberately rather than papered over with an assumed number.
     fall back to placeholder-then-patch (two windows: uploading, then
     post-creation-pre-conversion; a correction call once conversion finishes) when
     something genuinely forces the item to exist before the async work can complete —
-    e.g. a server-side background job that needs a DB row to attach to.
+    e.g. a server-side background job that needs a DB row to attach to. **"For free" only
+    holds for the drop/paste path.** A different item-creation path (e.g. a picker
+    dialog's own confirm handler) does not run through `insertDataTransfer` and gets no
+    automatic indicator — see `tapestry-collection-imports`' "Real gotchas" section for a
+    real, verified case (slow PDF item creation from a bulk picker) and the fix.
 11. **Verify a lazy-loaded dependency actually landed in its own chunk** — check real
     build output, not just that an `import()` call exists somewhere. A static top-level
     import in a file that's itself always loaded defeats the split silently.

@@ -8,7 +8,8 @@ skill_discovery_hints:
   - keywords: ["import picker", "HandleIAImportDialog", "IAImport", "collection import", "bulk import"]
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
   - keywords: ["import-items-list", "LazyList", "MAX_SELECTION"]
-last_verified: 2026-08-21
+  - keywords: ["pendingRequests", "DoingWorkIndicator", "hourglass indicator", "slow confirm button", "no loading feedback"]
+last_verified: 2026-09-03
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -209,6 +210,22 @@ the picker UI.
   cleanly through these same call sites with no warning, so don't rely on this catching
   every case — it only fires when the new member's shape is a strict subset of what existing
   code destructures.
+
+- **The picker's confirm button does not get the hourglass indicator for free.**
+  `tapestry-content-types` guardrail 10 notes that `insertDataTransfer` wraps the whole
+  drop/paste `ITEM_FACTORIES` pipeline in a `pendingRequests` increment/decrement, so
+  `DoingWorkIndicator` covers a slow conversion automatically. `HandleIAImportDialog`'s
+  own confirm handler (`createNewItems` + `dispatch(addAndPositionItems(...))`) is a
+  separate code path. It does not go through `insertDataTransfer`. It gets no automatic
+  indicator. Verified real and slow: creating a few `pdf` items runs `getPDFItemSize`
+  (`client/src/lib/media.ts`), which downloads and parses the whole PDF client-side to
+  read its page size. A real Commons PDF can run tens of megabytes. Selecting three such
+  files and confirming took about ten seconds with no visible feedback, matching a
+  real Wikimedia Commons Category import. Fix: wrap the confirm handler's async work in
+  the same `dispatch((model) => { model.pendingRequests++ })` /
+  `dispatch((model) => { model.pendingRequests-- })` pair, in a `try`/`finally`, matching
+  `insertDataTransfer`'s own convention exactly (`client/src/pages/tapestry/view-model/
+  utils.ts`) — this reuses the existing global indicator with no new UI component.
 
 ## Real PR review feedback (2026-08-20 and 2026-08-21)
 
