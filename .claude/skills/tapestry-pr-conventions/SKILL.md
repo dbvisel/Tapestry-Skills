@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from a real asteasolutions/tapestry-project maintainer across two real PRs (#96, IA search-query import; #109, client-side HEIC import), six review rounds, and one direct design question from the same reviewer outside GitHub — comment discipline, merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (but check its own boundary conditions), match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeeper who reviews PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across two real PRs (#96, IA search-query import; #109, client-side HEIC import), seven-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -12,23 +12,30 @@ skill_discovery_hints:
   - keywords: ["pre-submission checklist", "self-review before PR", "empty review body", "gh pr view comments empty", "catch review feedback before opening a PR"]
   - keywords: ["Blob vs File", "unnecessary type wrapping", "fallback only where needed", "check library API signature", "manufactured metadata unused filename"]
   - keywords: ["ASD-STE100", "Simplified Technical English", "comment writing style", "PR reply writing style", "reduce verbosity"]
+  - keywords: ["fileTypeFromBlob", "magic bytes", "content sniffing over extension", "file-type npm package", "colocate helper existing file", "TODO comment exception", "explicit return type inferred"]
 last_verified: 2026-09-03
 ---
 
-What a real reviewer at `asteasolutions/tapestry-project` actually asked for, across six
-real review rounds on two real PRs (plus one direct follow-up question from the same
-reviewer, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+What real reviewers at `asteasolutions/tapestry-project` actually asked for, across
+seven-plus real review rounds on two real PRs (plus one direct follow-up question from
+zmarinov-astea, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
 skill's findings were first folded into before being generalized out here) and
 [#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
-import — see `tapestry-content-types`' variation section). **Same reviewer on both PRs**,
-which is itself real signal: feedback that recurs in the same shape across two unrelated
-features is a stable preference of this specific gatekeeper, not a one-PR quirk. Every
-piece of feedback below was phrased as a general principle, not a feature-specific nitpick,
-so treat it as worth applying proactively on any future PR to this project rather than
-waiting to be told again. Whoever is about to open or update a PR here — this skill is
-meant to be run as a self-review pass on your own diff (see "Pre-submission checklist"
-below), not just consulted after a reviewer has already commented.
+import — see `tapestry-content-types`' variation section). **Points 1-13 are all
+`zmarinov-astea`**, verified across both PRs — feedback that recurs in the same shape
+across two unrelated features is a stable preference of that gatekeeper, not a one-PR
+quirk. **Points 14-17 are a second reviewer, `Sachanski`**, on a later round of PR #109
+and a round of PR #96 — their feedback so far is consistent in spirit with
+`zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the strongest
+real signal), so treat both as this repo's actual review bar rather than one person's
+idiosyncrasy, but keep the attribution honest since it's only been one round each from
+Sachanski so far — less evidence than points 1-13 have. Every piece of feedback below was
+phrased as a general principle, not a feature-specific nitpick, so treat it as worth
+applying proactively on any future PR to this project rather than waiting to be told
+again. Whoever is about to open or update a PR here — this skill is meant to be run as a
+self-review pass on your own diff (see "Pre-submission checklist" below), not just
+consulted after a reviewer has already commented.
 
 ## When to use this skill
 
@@ -210,6 +217,58 @@ below), not just consulted after a reviewer has already commented.
     while still trusting every other concrete value. Don't let "does this value exist"
     stand in for "does this value mean anything."
 
+14. **Colocate a small, one-off helper with its closest sibling in an existing file —
+    don't give it a dedicated single-function file.** PR #109, Sachanski's round:
+    `convertHeicFile` lived alone in a new `client/src/lib/heic.ts`. Reviewer asked for
+    it to move into the existing `client/src/lib/media.ts`, next to `compressImage` —
+    another single-purpose image-transform helper already living there. The file was
+    deleted, the function moved, all imports updated. The generalizable shape: before
+    creating a new file for one function, check whether an existing file already holds
+    functions doing the same *kind* of work (here: "transform a media file for import")
+    and put the new one there instead — a dedicated file is for something that actually
+    needs its own module boundary, not every helper that happens to be new.
+15. **The strongest available signal for "what kind of file is this" is the file's own
+    bytes, not its name, extension, or browser-reported MIME type — and an
+    already-installed dependency may already do this.** PR #109, Sachanski's round,
+    superseding the entire mediaType/extension back-and-forth in points 6, 9, 11, and 13
+    above: after four rounds across two reviewers debating which of `File.type` or a
+    filename extension to trust and when, Sachanski's fix used `fileTypeFromBlob`/
+    `fileTypeFromBuffer` from the `file-type` package — already a project dependency,
+    already imported elsewhere in this same file (`item-factories.ts`) for `.webloc`
+    detection — to read the file's actual magic bytes instead of trusting either weaker
+    signal. This is stronger than either signal points 6-13 debated: a browser-reported
+    `mediaType` can be empty or a generic sentinel (point 13), and a filename extension
+    can be wrong or missing outright (the original concern zmarinov-astea raised in
+    point 6 was specifically "an incorrect or missing extension on some Linux systems"
+    — magic-byte sniffing satisfies that concern directly, without needing any
+    extension fallback at all). **The lesson isn't just "use file-type instead of mime"
+    — it's that none of us (across two reviewers and four rounds) checked whether an
+    even more authoritative signal than the ones being argued about was already sitting
+    in the codebase as a dependency.** Before extending a signal-priority chain (weak
+    signal → weaker fallback → weakest fallback), check whether the *strongest possible*
+    signal (the actual file content) is available and already has a library for it,
+    rather than only ever choosing between the signals already in the discussion.
+16. **Don't write an explicit return type annotation when it's inferred and
+    unambiguous.** PR #109, Sachanski's round: `convertHeicFile(blob: Blob):
+    Promise<File>` had its `Promise<File>` return type annotation removed on request —
+    TypeScript already infers it correctly from the function body, and the codebase's
+    existing convention (e.g. `compressImage` right next to it) doesn't annotate
+    inferred return types either. Match the surrounding file's own convention on this
+    rather than adding an annotation "for clarity" by default.
+17. **A TODO comment is the one exception to point 4's "no comments" bar — but only
+    when a reviewer explicitly asks for exactly that, to flag a deliberately-deferred
+    piece of cleanup.** PR #96, Sachanski's round: the reviewer flagged real, sizeable
+    duplication between two branches of `ImportDetails` (an IA-shaped branch and the
+    new `OpenverseCollection` branch) but, rather than asking for an immediate merge
+    (contrast point 1, where zmarinov-astea asked for exactly that on a similar-shaped
+    finding), said the extraction could wait and asked for `// TODO: Extract a shared
+    layout component. This removes the duplication between the two branches below.`
+    to be added instead. This is different from a self-initiated "why" comment (which
+    point 4 rules out) — it's an explicit, reviewer-requested marker for work everyone
+    has agreed to defer, not an explanation of current logic. Add the TODO with
+    (approximately) the reviewer's own wording when this happens; don't extend it into
+    a general license to leave TODOs for deferred cleanup on your own initiative.
+
 ## Pre-submission checklist: catch these before the reviewer does
 
 The point of tracking this reviewer's feedback across multiple PRs is to stop paying for
@@ -265,6 +324,19 @@ checkable without waiting for a live comment:
     sentinels (`application/octet-stream`, and similar generic fallbacks elsewhere) that
     are truthy but carry no real information — treat those the same as missing, while
     still trusting every other concrete value (point 13).
+14. **New single-purpose helper** — before giving a new function its own file, check
+    whether an existing file already holds siblings doing the same kind of work and put
+    it there instead (point 14).
+15. **Is there a stronger signal available than the ones you're choosing between?**
+    Before picking a "least-bad" option among weak/derived signals (an extension, a
+    possibly-empty MIME type), check whether the file's actual content is available and
+    an already-installed dependency can read it (point 15).
+16. **Inferred return types** — does a function have an explicit return type annotation
+    TypeScript would infer anyway? Check whether sibling functions in the same file
+    annotate theirs; if not, drop it (point 16).
+17. **Reviewer-requested TODO** — if a reviewer explicitly asks for a TODO marking
+    deferred cleanup (not an immediate fix), add it with close to their own wording;
+    don't treat this as license to add other self-initiated TODOs (point 17).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
@@ -287,13 +359,15 @@ signal to watch for going forward — the former means "run it more carefully ne
 the latter means "add a new point," and both are useful, but only the former would mean
 the checklist itself has a gap.
 
-**A growing list is itself worth watching**: this checklist is now 13 items, entirely
+**A growing list is itself worth watching**: this checklist is now 17 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
-correct for keeping it evidence-based, but a 13-plus-item self-review pass risks becoming
-too long to actually run carefully every time — the opposite of the speed this was meant
-to buy. If it keeps growing, worth revisiting whether some points can merge (e.g. 6/9/11/13
-are all facets of "trust the strongest already-derived signal") rather than only ever
-appending.
+correct for keeping it evidence-based, but a 17-item self-review pass risks becoming too
+long to actually run carefully every time — the opposite of the speed this was meant to
+buy. Point 15 is itself a sharp example of why consolidation matters here: it directly
+supersedes the entire 6/9/11/13 chain (a stronger signal — actual file content — was
+available the whole time and nobody checked). If it keeps growing, worth revisiting
+whether 6/9/11/13/15 can merge into one "trust the strongest signal, and periodically
+re-ask whether an even stronger one exists" point, rather than only ever appending.
 
 ## The real review-comment workflow
 
@@ -329,14 +403,19 @@ text actually gets written, code comment or review reply alike.
 
 ## Guardrails
 
-1. **This is observed behavior from one specific reviewer, now verified across two
-   unrelated PRs/features** — real and worth taking seriously, but still don't present it
-   as if every asteasolutions reviewer will behave identically; it's this reviewer's
-   pattern, not necessarily every gatekeeper's. If a future PR's reviewer gives different
-   guidance, that's the more current signal for that PR.
+1. **Points 1-13 are observed behavior from one specific reviewer (`zmarinov-astea`),
+   verified across two unrelated PRs/features; points 14-17 are a second reviewer
+   (`Sachanski`), so far only one round each on two PRs** — real and worth taking
+   seriously, but don't present either as if every asteasolutions reviewer will behave
+   identically, and don't overstate Sachanski's points as being as thoroughly verified as
+   zmarinov-astea's just because they're in the same numbered list. If a future PR's
+   reviewer gives different guidance, that's the more current signal for that PR.
 2. **Don't add a speculative "why" comment expecting it to survive review here** — see
    point 4 above. This cuts against generic advice (including this skill set's own default
    elsewhere) to explain non-obvious constraints; this repo's bar is specifically narrower.
+   The one exception is a TODO a reviewer explicitly asks for (point 17) — that's a
+   reviewer-requested marker, not a self-initiated explanatory comment, so it doesn't
+   loosen this guardrail for anything you add on your own.
 3. **When two pieces of code differ only in a value passed through the same shape**,
    default to merging and parameterizing rather than duplicating, even as a first draft —
    don't treat "clean up the duplication later if asked" as an acceptable intermediate
