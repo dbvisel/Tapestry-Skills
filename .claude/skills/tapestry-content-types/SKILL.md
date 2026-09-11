@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format needing conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real competing PRs (HEIC image import)
+description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format needing conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real competing PRs (HEIC image import), and a real before/after on IIIF's own rendering approach (hand-rolled OpenSeadragon wrapper vs. reusing a full third-party viewer library's own top-level component, and accepting a library bug over a partial workaround)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -12,7 +12,8 @@ skill_discovery_hints:
   - keywords: ["client-side vs server-side conversion", "lazy load dependency", "code splitting", "bundle size", "moduleResolution subpath exports"]
   - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
   - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
-last_verified: 2026-09-03
+  - keywords: ["Clover IIIF", "full third-party viewer component", "reuse viewer library vs hand-roll", "accept known library bug", "OpenSeadragon addSimpleImage bug"]
+last_verified: 2026-09-11
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -20,8 +21,17 @@ alongside the ones that ship today (`text`, `actionButton`, `audio`, `book`, `im
 `pdf`, `video`, `webpage` — see `tapestry-client-features`). Generalized from two real,
 complete reference implementations on unmerged fork branches:
 
-- **IIIF deep-zoom image support** — `dbvisel/tapestry-project` branch `iiif-upstream`, a
-  single clean commit directly on top of upstream `internetarchive/tapestry-project` `main`.
+- **IIIF deep-zoom image support** — originally `dbvisel/tapestry-project` branch
+  `iiif-upstream` (a single clean commit directly on top of upstream
+  `internetarchive/tapestry-project` `main`, opened as
+  [PR #77](https://github.com/asteasolutions/tapestry-project/pull/77)), later reworked
+  on branch `iiif-clover-viewer` to render the whole manifest — multi-canvas navigation,
+  metadata, structures — via the third-party `@samvera/clover-iiif` library instead of a
+  hand-rolled single-canvas OpenSeadragon wrapper, opened as
+  [PR #123](https://github.com/asteasolutions/tapestry-project/pull/123) (superseding
+  #77). The schema/DTO/export-version steps below are unchanged across both — only the
+  rendering step (10) and the dependency footprint (step 21) differ; see the note at
+  step 10.
 - **STL 3D model viewing (`model3d`)** — one part of a single giant, admittedly messy
   commit found in unmerged exploratory work, which bundles in a lot of unrelated work. Only
   the files/lines that actually touch `model3d` were used here — the rest of that commit was
@@ -135,11 +145,28 @@ lowercase-`type`/PascalCase-class convention exactly.
 ### 3. Client rendering (core-client generic + client editor-specific)
 
 10. **`core-client/src/components/tapestry/items/<x>/`** — new component folder: a
-    `viewer.tsx` (or similarly named file) holding the actual rendering logic (IIIF's
-    OpenSeadragon deep-zoom viewer lives entirely here, reading the new field via
-    `useTapestryConfig().useStoreData`), and an `index.tsx` wrapping it in `<TapestryItem>`
-    with the generic `<ItemToolbar>`. This is the component both the real app (`client`)
-    and the standalone `viewer` app can fall back to.
+    `viewer.tsx` (or similarly named file) holding the actual rendering logic, and an
+    `index.tsx` wrapping it in `<TapestryItem>` with the generic `<ItemToolbar>`. This is
+    the component both the real app (`client`) and the standalone `viewer` app can fall
+    back to.
+
+    IIIF's own rendering logic changed shape between its two reference versions, and the
+    choice between them is a real, generalizable tradeoff, not just a historical detail:
+    **PR #77** hand-rolled a single-canvas OpenSeadragon wrapper here directly (fetch the
+    manifest via the `core/` module, read the field via
+    `useTapestryConfig().useStoreData`, drive `OpenSeadragon(...)` in a `useEffect`).
+    **PR #123** replaced that entirely with `@samvera/clover-iiif`'s full `<Viewer>`
+    component, which takes the plain manifest URL and does its own fetching, parsing, and
+    multi-canvas UI — deleting most of the hand-rolled manifest-navigation code from the
+    `core/` module (see step 2) in exchange for the third-party library owning a real,
+    documented OpenSeadragon bug outright (see `tapestry-pr-conventions` point 18: the
+    reviewer explicitly preferred accepting a known limitation over adding a workaround
+    that only partially covered the bug). **When a new type's format has an existing,
+    full-featured viewer library** (not just a low-level rendering primitive), prefer
+    reusing that library's own top-level component over hand-rolling the surrounding
+    UI/state, even if it means inheriting some of the library's own rough edges — the
+    maintenance savings from not re-implementing manifest/multi-item navigation logic
+    generally outweighs working around a library bug piecemeal.
 
     **If the viewer owns a continuous render loop** (e.g. a WebGL/three.js scene driven by
     `requestAnimationFrame`, as `model3d`'s viewer is — unlike OpenSeadragon, which handles
@@ -507,3 +534,11 @@ out here deliberately rather than papered over with an assumed number.
     TypeScript types on the specific API you'll call (not just any `.d.ts` file existing)
     and the license of what's actually bundled (not just the package's declared license
     field) — both have real, verified failure cases among popular HEIC-decoding options.
+14. **Prefer a full-featured third-party viewer/renderer library's own top-level component
+    over hand-rolling the surrounding state and UI**, when the format already has one —
+    even if it means inheriting a real bug in the library rather than working around it
+    (see step 10's IIIF note and `tapestry-pr-conventions` point 18). Before building a
+    workaround for an apparent gap in any dependency (a missing feature, an undeclared
+    sub-dependency), open that dependency's actual `package.json` in `node_modules` and
+    check — don't assume from documentation, an earlier read, or memory of it
+    (`tapestry-pr-conventions` point 19).

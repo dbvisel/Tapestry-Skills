@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across two real PRs (#96, IA search-query import; #109, client-side HEIC import), seven-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across three real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework), eight-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -13,24 +13,28 @@ skill_discovery_hints:
   - keywords: ["Blob vs File", "unnecessary type wrapping", "fallback only where needed", "check library API signature", "manufactured metadata unused filename"]
   - keywords: ["ASD-STE100", "Simplified Technical English", "comment writing style", "PR reply writing style", "reduce verbosity"]
   - keywords: ["fileTypeFromBlob", "magic bytes", "content sniffing over extension", "file-type npm package", "colocate helper existing file", "TODO comment exception", "explicit return type inferred"]
-last_verified: 2026-09-03
+  - keywords: ["known limitation vs workaround", "partial fix for upstream bug", "accept library bug", "third-party viewer bug", "OpenSeadragon known limitation"]
+  - keywords: ["verify dependency package.json", "does this package declare X", "check node_modules package.json before workaround", "re-check review thread for further reply", "thread overruled"]
+last_verified: 2026-09-11
 ---
 
 What real reviewers at `asteasolutions/tapestry-project` actually asked for, across
-seven-plus real review rounds on two real PRs (plus one direct follow-up question from
+eight-plus real review rounds on three real PRs (plus one direct follow-up question from
 zmarinov-astea, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
-skill's findings were first folded into before being generalized out here) and
+skill's findings were first folded into before being generalized out here),
 [#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
-import — see `tapestry-content-types`' variation section). **Points 1-13 are all
-`zmarinov-astea`**, verified across both PRs — feedback that recurs in the same shape
-across two unrelated features is a stable preference of that gatekeeper, not a one-PR
+import — see `tapestry-content-types`' variation section), and
+[#123](https://github.com/asteasolutions/tapestry-project/pull/123) (Clover IIIF viewer
+rework — see `tapestry-content-types`' IIIF reference). **Points 1-13 and 18-19 are all
+`zmarinov-astea`**, verified across all three PRs — feedback that recurs in the same shape
+across unrelated features is a stable preference of that gatekeeper, not a one-PR
 quirk. **Points 14-17 are a second reviewer, `Sachanski`**, on a later round of PR #109
 and a round of PR #96 — their feedback so far is consistent in spirit with
 `zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the strongest
 real signal), so treat both as this repo's actual review bar rather than one person's
 idiosyncrasy, but keep the attribution honest since it's only been one round each from
-Sachanski so far — less evidence than points 1-13 have. Every piece of feedback below was
+Sachanski so far — less evidence than points 1-13/18-19 have. Every piece of feedback below was
 phrased as a general principle, not a feature-specific nitpick, so treat it as worth
 applying proactively on any future PR to this project rather than waiting to be told
 again. Whoever is about to open or update a PR here — this skill is meant to be run as a
@@ -268,6 +272,34 @@ consulted after a reviewer has already commented.
     has agreed to defer, not an explanation of current logic. Add the TODO with
     (approximately) the reviewer's own wording when this happens; don't extend it into
     a general license to leave TODOs for deferred cleanup on your own initiative.
+18. **Reject a partial workaround for a rare upstream-library bug in favor of accepting
+    it as a known limitation — especially when the workaround doesn't even fully solve
+    the problem.** [PR #123](https://github.com/asteasolutions/tapestry-project/pull/123)
+    (Clover IIIF viewer rework, zmarinov-astea): a real, reproducible OpenSeadragon bug
+    broke a second simultaneously-open instance of a single-canvas IIIF manifest. The fix
+    routed single-canvas manifests through Clover's lower-level `<Image>` component with
+    `isTiledImage` forced, sidestepping the buggy code path for that one case, while a
+    narrower version of the same bug still affected multi-canvas manifests (unfixable
+    without dropping Clover's full `<Viewer>` entirely). Reviewer: *"it adds too much
+    overhead for not a rare use case. Also the bug will persist for multi-canvas iiifs
+    even with your workaround. So remove the CloverImage logic."* The generalizable
+    shape: a workaround that only covers part of a bug's surface, at the cost of a real
+    second code path, is a worse trade than documenting the bug as a known limitation and
+    keeping one code path — same "avoid unneeded complexity for an edge case" instinct as
+    points 8/9, extended from data-shape fallbacks to a third-party UI library's own bug.
+19. **Verify a suspected "this dependency doesn't declare what it needs" claim by reading
+    that dependency's own `package.json`, not by trusting an earlier, unverified read of
+    it.** Same PR, same reviewer: after I added a Vite `resolve.alias` (routing
+    `@asteasolutions/epub-reader`'s internal bare `lodash` import to the already-declared
+    `lodash-es`) on the assumption that `epub-reader` "declares only `lodash-es`,"
+    reviewer: *"Bare lodash is still a dependency. Leave it like that and remove the
+    aliases."* Checking `node_modules/@asteasolutions/epub-reader/package.json` directly
+    showed the assumption was simply wrong — it declares a real `"lodash": "^4.17.21"`
+    dependency of its own, already resolvable through normal npm hoisting with no alias
+    needed, including in an isolated single-workspace Docker build. The alias was solving
+    a problem that did not exist. Before building a workaround for an apparent dependency
+    gap, read the actual `package.json` (or lockfile entry) in `node_modules`, not a
+    summary or a prior session's memory of it.
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -337,6 +369,13 @@ checkable without waiting for a live comment:
 17. **Reviewer-requested TODO** — if a reviewer explicitly asks for a TODO marking
     deferred cleanup (not an immediate fix), add it with close to their own wording;
     don't treat this as license to add other self-initiated TODOs (point 17).
+18. **Partial workaround vs. known limitation** — does a fix add a whole extra code path
+    to cover only part of a rare upstream bug's surface, while the bug still exists
+    elsewhere? Consider documenting it as a known limitation instead of shipping the
+    extra path (point 18).
+19. **Dependency claims** — before adding a workaround for "this package doesn't declare
+    dependency X," open its actual `package.json` in `node_modules` and check. Don't
+    trust an earlier read, a summary, or memory of it (point 19).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
@@ -397,6 +436,17 @@ substantive inline comment, with the same empty top-level body. Treat any empty-
 review — approving or not — as a prompt to go check inline comments, not as a sign
 there's nothing to address.
 
+**A thread you already replied to can get a further reply that overrules your fix —
+re-fetch every thread's comments before assuming "awaiting response" still holds.** PR
+#123: after replying to two threads with an explanation of my approach (the lodash alias,
+the CloverImage workaround), the reviewer had in fact already replied again to both,
+rejecting the approach outright (see points 18-19 above) — discovered only by re-listing
+`gh api repos/<owner>/<repo>/pulls/<number>/comments` and noticing `in_reply_to_id`
+pointing at comments I thought were still open-ended. Don't rely on a mental model of
+"which threads are settled" built at the time you last replied — a long-running PR
+session should re-check the full comment list (sorted by `in_reply_to_id`) before treating
+any thread as merely pending.
+
 ## Writing style for comments and review replies
 
 **This is a standing project preference, not observed reviewer feedback** — unlike every
@@ -413,13 +463,14 @@ text actually gets written, code comment or review reply alike.
 
 ## Guardrails
 
-1. **Points 1-13 are observed behavior from one specific reviewer (`zmarinov-astea`),
-   verified across two unrelated PRs/features; points 14-17 are a second reviewer
-   (`Sachanski`), so far only one round each on two PRs** — real and worth taking
-   seriously, but don't present either as if every asteasolutions reviewer will behave
-   identically, and don't overstate Sachanski's points as being as thoroughly verified as
-   zmarinov-astea's just because they're in the same numbered list. If a future PR's
-   reviewer gives different guidance, that's the more current signal for that PR.
+1. **Points 1-13 and 18-19 are observed behavior from one specific reviewer
+   (`zmarinov-astea`), verified across three unrelated PRs/features; points 14-17 are a
+   second reviewer (`Sachanski`), so far only one round each on two PRs** — real and
+   worth taking seriously, but don't present either as if every asteasolutions reviewer
+   will behave identically, and don't overstate Sachanski's points as being as thoroughly
+   verified as zmarinov-astea's just because they're in the same numbered list. If a
+   future PR's reviewer gives different guidance, that's the more current signal for that
+   PR.
 2. **Don't add a speculative "why" comment expecting it to survive review here** — see
    point 4 above. This cuts against generic advice (including this skill set's own default
    elsewhere) to explain non-obvious constraints; this repo's bar is specifically narrower.
@@ -441,8 +492,8 @@ text actually gets written, code comment or review reply alike.
    passes in** — see point 8 above. Write the helper for what actually calls it today;
    widen it when a real caller needs the wider case, not preemptively.
 7. See `tapestry-collection-imports` for the concrete PR (#96), and `tapestry-content-types`
-   for PR (#109), that all of the above was verified against, including the actual code
-   before/after each round of feedback.
+   for PRs (#109, #123), that all of the above was verified against, including the actual
+   code before/after each round of feedback.
 8. **Comment and reply text follows ASD-STE100 style (see `asd-ste100`) — but this is a
    standing project preference, not something any reviewer here asked for.** Don't cite it
    as reviewer feedback in a PR reply or elsewhere in this skill's "verified" framing.
