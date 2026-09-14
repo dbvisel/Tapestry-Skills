@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across three real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework), eight-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate, composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -15,26 +15,31 @@ skill_discovery_hints:
   - keywords: ["fileTypeFromBlob", "magic bytes", "content sniffing over extension", "file-type npm package", "colocate helper existing file", "TODO comment exception", "explicit return type inferred"]
   - keywords: ["known limitation vs workaround", "partial fix for upstream bug", "accept library bug", "third-party viewer bug", "OpenSeadragon known limitation"]
   - keywords: ["verify dependency package.json", "does this package declare X", "check node_modules package.json before workaround", "re-check review thread for further reply", "thread overruled"]
-last_verified: 2026-09-11
+  - keywords: ["maps instead of ternaries", "per-branch config function", "ternary sprawl", "discriminant field dispatch"]
+  - keywords: ["reject server-side proxy", "CORS instead of proxy", "autoReload false", "rate limit background reload"]
+  - keywords: ["direct union member vs nested platform union", "rename type outgrows scope", "flatten nested discriminated union"]
+last_verified: 2026-09-14
 ---
 
 What real reviewers at `asteasolutions/tapestry-project` actually asked for, across
-eight-plus real review rounds on three real PRs (plus one direct follow-up question from
+nine-plus real review rounds on four real PRs (plus one direct follow-up question from
 zmarinov-astea, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
 skill's findings were first folded into before being generalized out here),
 [#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
-import — see `tapestry-content-types`' variation section), and
+import — see `tapestry-content-types`' variation section),
 [#123](https://github.com/asteasolutions/tapestry-project/pull/123) (Clover IIIF viewer
-rework — see `tapestry-content-types`' IIIF reference). **Points 1-13 and 18-19 are all
-`zmarinov-astea`**, verified across all three PRs — feedback that recurs in the same shape
-across unrelated features is a stable preference of that gatekeeper, not a one-PR
-quirk. **Points 14-17 are a second reviewer, `Sachanski`**, on a later round of PR #109
-and a round of PR #96 — their feedback so far is consistent in spirit with
-`zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the strongest
-real signal), so treat both as this repo's actual review bar rather than one person's
-idiosyncrasy, but keep the attribution honest since it's only been one round each from
-Sachanski so far — less evidence than points 1-13/18-19 have. Every piece of feedback below was
+rework — see `tapestry-content-types`' IIIF reference), and
+[#112](https://github.com/asteasolutions/tapestry-project/pull/112) (Openverse/Wikimedia
+Commons collection import — see `tapestry-collection-imports`, points 20-22). **Points
+1-13 and 18-22 are all `zmarinov-astea`**, verified across all four PRs — feedback that
+recurs in the same shape across unrelated features is a stable preference of that
+gatekeeper, not a one-PR quirk. **Points 14-17 are a second reviewer, `Sachanski`**, on a
+later round of PR #109 and a round of PR #96 — their feedback so far is consistent in
+spirit with `zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the
+strongest real signal), so treat both as this repo's actual review bar rather than one
+person's idiosyncrasy, but keep the attribution honest since it's only been one round
+each from Sachanski so far — less evidence than points 1-13/18-22 have. Every piece of feedback below was
 phrased as a general principle, not a feature-specific nitpick, so treat it as worth
 applying proactively on any future PR to this project rather than waiting to be told
 again. Whoever is about to open or update a PR here — this skill is meant to be run as a
@@ -300,6 +305,63 @@ consulted after a reviewer has already commented.
     a problem that did not exist. Before building a workaround for an apparent dependency
     gap, read the actual `package.json` (or lockfile entry) in `node_modules`, not a
     summary or a prior session's memory of it.
+20. **Replace a ternary chain branching on a discriminant field with one function
+    returning a per-branch config object, once there's more than one such branch or
+    once extensibility comes up.** [PR #112](https://github.com/asteasolutions/tapestry-project/pull/112)
+    (Openverse/Wikimedia Commons collection import): a component had five separate
+    `platform === 'openverse'` ternaries/conditionals scattered through it (detail
+    columns, detail header, item media-type fallback, empty-placeholder text, which
+    `fetch*` function to call), and a sibling component had a two-level nested ternary
+    for a label/noun pair. Reviewer: *"Create maps instead of having so many ternary
+    operators here and on other places. What will happen when we import even more
+    collection types?"* Collapsed each into one small `if`/`return` function building a
+    single config object per branch (`describeExternalCollection`), and into per-type
+    components for the label case. **"Maps" here is shorthand for "one dispatch point
+    per concern," not literally a `Record` object** — a literal `Record` cannot
+    type-safely map a discriminated union to differently-shaped per-variant data
+    without an unsafe cast, so a function with an early return per branch is the
+    correct TypeScript idiom, and satisfies the same underlying ask (adding a branch
+    means touching one place, not every scattered ternary).
+21. **Don't reach for a server-side proxy to protect a rate-limited third-party API
+    before checking whether it's actually needed.** Same PR: a first draft routed every
+    Openverse/Wikimedia Commons request through a server-side proxy with a Redis cache,
+    reasoning that centralizing and caching requests would reduce the chance of
+    tripping a rate limit. Reviewer: *"I don't think we need to route anything to the
+    server, just to try avoiding the request limits. These imports don't happen that
+    often and shouldn't trigger the restrictions. We could just disable the autoreload
+    on our lazy list for the collection import."* Verified before agreeing: both
+    platforms send real `access-control-allow-origin: *` headers on the actual
+    endpoints called (checked with a live `curl -D -`, not assumed), so nothing blocked
+    calling them directly from the browser — and the actual rate-limit risk traced back
+    to an existing list component's `autoReload` default (`true`, polling the same
+    request every 10 seconds for as long as a dialog stayed open), not to picker
+    pagination itself. Removed the proxy and its cache entirely; disabled `autoReload`
+    on the affected list. The generalizable shape: before adding server-side
+    infrastructure to guard against a third-party rate limit, check (a) whether the API
+    genuinely requires it (CORS support is a fast, concrete check), and (b) whether the
+    real trigger is something narrower and already fixable client-side, like a
+    background-polling default — a proxy is the more complex fix and should lose to a
+    simpler one whenever either check comes back favorable.
+22. **Give a discriminated union direct members per real-world case — don't nest a
+    second dimension (like a platform) inside one shared member.** Same PR: a first
+    draft added one `ExternalCollection` union member shaped as `{ type:
+    'ExternalCollection'; total: number } & ({ platform: 'openverse'; ... } | {
+    platform: 'wikimedia-commons'; ... })`, reasoning that fewer top-level members meant
+    less integration-point surface for a future platform. Reviewer: *"the external
+    collection type should not exist, instead OpenverseCollection and
+    wikimediaCommonsCategory should be direct subtypes."* Shipped as two ordinary
+    top-level members with no `platform` field at all, matching every other member of
+    the same union. The "fewer integration points" argument for nesting didn't hold up
+    in practice — call sites needed one branch per platform either way, and the direct
+    shape reads the same as every other member instead of being the one exception. Same
+    round, a related naming correction: *"Since this type is no longer strictly
+    connected to IA, can we rename it to CollectionImport?"* — the type, and every
+    identifier carrying its old name (a field, two `Record` maps, a component and its
+    directory), had been named for what the mechanism used to be, not what it had grown
+    into. **Expect both corrections together whenever a mechanism named after one
+    specific case starts serving a second, different case**: check whether its name is
+    still accurate, and whether a wrapper/nesting shape it uses to "save" top-level
+    members should just be flattened into direct ones instead.
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -376,6 +438,18 @@ checkable without waiting for a live comment:
 19. **Dependency claims** — before adding a workaround for "this package doesn't declare
     dependency X," open its actual `package.json` in `node_modules` and check. Don't
     trust an earlier read, a summary, or memory of it (point 19).
+20. **Ternary sprawl** — does a component have more than one ternary/conditional
+    branching on the same discriminant field, scattered across several concerns? Collapse
+    them into one function returning a per-branch config object instead (point 20).
+21. **Proxy-first instinct** — about to add a server-side proxy or cache to protect
+    against a third-party rate limit? Check real CORS support first, and check whether
+    the actual trigger is something narrower (a list's own background-reload default)
+    that's fixable without server-side infrastructure at all (point 21).
+22. **Nested union vs. direct members, and a name that's outgrown its scope** — does a
+    discriminated union nest a second dimension (a platform, a variant) inside one
+    shared member instead of giving each case its own top-level member? And does the
+    type/mechanism's name (or any identifier carrying it) still describe what it now
+    does, now that a second case exists? (point 22)
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
@@ -408,9 +482,9 @@ exactly the job it was built for: catching a point-1-shaped issue pre-review ins
 paying for it as a round-trip, on a PR where — unlike #109 — the checklist was run
 proactively from the start rather than reconstructed after the fact.
 
-**A growing list is itself worth watching**: this checklist is now 17 items, entirely
+**A growing list is itself worth watching**: this checklist is now 22 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
-correct for keeping it evidence-based, but a 17-item self-review pass risks becoming too
+correct for keeping it evidence-based, but a 22-item self-review pass risks becoming too
 long to actually run carefully every time — the opposite of the speed this was meant to
 buy. Point 15 is itself a sharp example of why consolidation matters here: it directly
 supersedes the entire 6/9/11/13 chain (a stronger signal — actual file content — was
@@ -463,8 +537,8 @@ text actually gets written, code comment or review reply alike.
 
 ## Guardrails
 
-1. **Points 1-13 and 18-19 are observed behavior from one specific reviewer
-   (`zmarinov-astea`), verified across three unrelated PRs/features; points 14-17 are a
+1. **Points 1-13 and 18-22 are observed behavior from one specific reviewer
+   (`zmarinov-astea`), verified across four unrelated PRs/features; points 14-17 are a
    second reviewer (`Sachanski`), so far only one round each on two PRs** — real and
    worth taking seriously, but don't present either as if every asteasolutions reviewer
    will behave identically, and don't overstate Sachanski's points as being as thoroughly
@@ -491,9 +565,9 @@ text actually gets written, code comment or review reply alike.
 6. **Don't add defensive/general-purpose handling for an input shape nothing currently
    passes in** — see point 8 above. Write the helper for what actually calls it today;
    widen it when a real caller needs the wider case, not preemptively.
-7. See `tapestry-collection-imports` for the concrete PR (#96), and `tapestry-content-types`
-   for PRs (#109, #123), that all of the above was verified against, including the actual
-   code before/after each round of feedback.
+7. See `tapestry-collection-imports` for the concrete PRs (#96, #112), and
+   `tapestry-content-types` for PRs (#109, #123), that all of the above was verified
+   against, including the actual code before/after each round of feedback.
 8. **Comment and reply text follows ASD-STE100 style (see `asd-ste100`) — but this is a
    standing project preference, not something any reviewer here asked for.** Don't cite it
    as reviewer feedback in a PR reply or elsewhere in this skill's "verified" framing.

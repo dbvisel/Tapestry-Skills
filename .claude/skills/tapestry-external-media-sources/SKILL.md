@@ -1,6 +1,6 @@
 ---
 name: tapestry-external-media-sources
-description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Openverse and Wikimedia Commons are now real, verified, non-fork implementations (asteasolutions/tapestry-project#112, covering image/audio for Openverse and image/video/audio/pdf for Commons) — including a real codec-compatibility gotcha (prefer Commons' WebM/MP3 transcodes over Ogg originals) and a rate-limiting-forces-server-side-proxying finding that goes beyond plain CORS
+description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Openverse and Wikimedia Commons are now real, verified, non-fork implementations (asteasolutions/tapestry-project#112, covering image/audio for Openverse and image/video/audio/pdf for Commons, through one full review round as of this writing) — including a real codec-compatibility gotcha (prefer Commons' WebM/MP3 transcodes over Ogg originals) and a corrected finding on when a server-side proxy is actually warranted for a rate-limited third-party API (real review rejected routing through one by default; both platforms are called directly from the client)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -9,8 +9,8 @@ skill_discovery_hints:
   - keywords: ["File: page", "direct file URL", "hotlinkable URL", "media source resolver"]
   - keywords: ["item-factories.ts", "createMediaItem", "parseCommonsFileURL"]
   - keywords: ["Ogg Theora WebM transcode", "Ogg Vorbis Safari", "Commons derivatives", "browser codec compatibility"]
-  - keywords: ["CORS present but rate limited", "burst rate limit", "429 concurrent requests", "server-side proxy required"]
-last_verified: 2026-09-03
+  - keywords: ["CORS present rate limited burst test", "429 concurrent requests", "reject server-side proxy", "autoReload false instead of proxy"]
+last_verified: 2026-09-14
 ---
 
 Checklist for letting users paste a URL from an external platform that describes a single
@@ -27,7 +27,8 @@ against the actual live external APIs and opened as a PR against actual upstream
 - **Openverse image/audio import** — `core/src/openverse.ts` +
   `externalMediaFactory` in `client/src/stage/item-factories.ts` — real, verified, part of
   [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
-  (open, unreviewed as of this writing). Handles both `/image/<uuid>` and `/audio/<uuid>`
+  (through one full review round, 2026-09-14, as of this writing). Handles both
+  `/image/<uuid>` and `/audio/<uuid>`
   page URLs (`OpenverseMediaType = 'image' | 'audio'`) — e.g.
   `https://openverse.org/image/6c17d9b6-7721-4d42-95e6-1d570cadae74?p=1` (the `?p=1` is just
   the search-results page the user came from and is correctly ignored — the parser matches
@@ -46,12 +47,13 @@ against the actual live external APIs and opened as a PR against actual upstream
   pattern if added later — see step 2's mapping table.
 
 `#112` is real, working code, verified end-to-end against the actual live Openverse and
-Commons APIs (not just read from their docs) — but it is **not yet merged or reviewed**.
-Don't tell a user Openverse/Commons single-file import is upstream and shipping.
+Commons APIs (not just read from their docs), and through one real review round — but it
+is **not yet merged**. Don't tell a user Openverse/Commons single-file import is upstream
+and shipping.
 
 **Scope note**: both reference implementations also support a *bulk* variant (importing
 every file in a Commons category, or an Openverse tag search, via a picker dialog). That
-reuses a separate, pre-existing generic mechanism (`IAImport` + `HandleIAImportDialog`) and
+reuses a separate, pre-existing generic mechanism (`CollectionImport` + `CollectionImportDialog`) and
 is deliberately **out of scope for this skill** — this covers only the single-URL-to-
 single-item case. See `tapestry-collection-imports` for the picker/bulk-import mechanism.
 
@@ -101,22 +103,27 @@ surface Tapestries doesn't already have for any existing item type.
      explicit `origin=*` query parameter to opt into CORS; other platforms' REST-style APIs
      may be CORS-enabled by default (Openverse's is) or may need a different opt-in
      mechanism, or may not support browser calls at all (in which case resolution needs to
-     happen server-side instead — see the note at the end of this checklist).
-   - **CORS being present on a per-request basis does not mean client-side calls are
-     actually safe — check burst/rate-limit behavior too, separately.** Both Openverse
-     and Wikimedia Commons send permissive CORS headers on ordinary single requests, yet
-     both are unsafe to call directly from the browser: live-fired 20-25 concurrent
-     requests got a majority of `429`s from both (Openverse via Cloudflare
+     happen server-side instead). A live `curl -D -` against the real endpoint you'll
+     actually call is enough to check this — don't assume from general reputation, and
+     don't assume a server-side proxy is needed until this check actually fails.
+   - **A synthetic concurrent-request burst can trip both platforms' rate limits even
+     though ordinary single requests carry permissive CORS headers** — live-fired 20-25
+     concurrent requests got a majority of `429`s from both (Openverse via Cloudflare
      bot-mitigation — the challenge response carries no CORS header at all, which is what
      actually surfaces as a confusing "CORS blocked" browser error; Commons via its own
      gateway rate limiter — 9 of 20 came back `429`, a token-bucket-style limit, not a
-     clean cutoff). A scrolling collection picker (see `tapestry-collection-imports`)
-     produces exactly this request pattern. **Verify actual concurrent-request behavior
-     with a real burst test (a handful of parallel `curl`s), not just a single request's
-     response headers, before deciding client-side resolution is viable** — route
-     through the server-side proxy with caching if it isn't (see the note at the end of
-     this checklist either way, since collection browsing needs it regardless of what a
-     single-item lookup can get away with).
+     clean cutoff). **This is real, verified data, but don't let it lead you to a
+     server-side proxy by default** — an earlier version of this skill did exactly that,
+     and real review on #112 rejected it: normal picker usage (paginated, one request at
+     a time, occasionally retried) doesn't reproduce a 20-concurrent-request burst; what
+     actually approached that risk in practice was an unrelated background-reload default
+     on the list component (`LazyList`'s `autoReload`, since disabled — see
+     `tapestry-collection-imports`), not the resolution calls this checklist covers.
+     **Verify actual concurrent-request behavior with a real burst test** so you know the
+     platform's real limits, but treat "the API can be rate-limited under a synthetic
+     stress test" and "our actual usage pattern will trip that limit" as two separate
+     questions — confirm the second one against how the feature is really used before
+     reaching for server-side infrastructure to guard against the first.
    - **Use small typed accessor helpers** (`asRecord`/`asString`/`asNumber`, navigating
      `unknown` JSON defensively) rather than casting the API response — same convention as
      `core/src/iiif.ts` (see `tapestry-content-types`). External platforms' JSON is not
@@ -188,7 +195,7 @@ surface Tapestries doesn't already have for any existing item type.
      const fileInfo = await fetch<Platform>FileInfo(parsed.id)
      const itemType = fileInfo && platformItemType(fileInfo)
      if (!itemType) return null
-     return { items: [await createMediaItem(itemType, fileInfo.url, tapestryId)], iaImports: [] }
+     return { items: [await createMediaItem(itemType, fileInfo.url, tapestryId)], collectionImports: [] }
    }
    ```
    The created item's `source` is `fileInfo.url` — the **resolved direct file URL**, not the
@@ -205,20 +212,24 @@ surface Tapestries doesn't already have for any existing item type.
    zero modification. This is the lightest of the three "URL connection" patterns for
    exactly that reason.
 
-**Route through a server-side proxy by default, not only when CORS is missing.** The
-original framing here was that server-side resolution is an exception for the rare
-CORS-disabled platform. Real testing corrected that: both Openverse and Wikimedia Commons
-are CORS-enabled *and* both still need server-side proxying, because both rate-limit
-request bursts regardless of CORS (see the CORS bullet above) — a picker's scrolling
-behavior alone is enough to trigger it. `core/src/<platform>.ts`'s `fetch*` functions are
-still framework-free/pure (so they're callable from either side), but the actual runtime
-call path for both platforms is: client → the generic `proxy` REST resource
-(`server/src/resources/proxy.ts`, a `platform`-tagged discriminated union of operations
-shared across platforms — see `tapestry-collection-imports`' "Generalizing across
-multiple platforms in one PR" for the exact shape) → the `core/` fetch function, called
-server-side. **Treat direct client-side calls to an external platform's API as something
-to justify with a real burst test, not the default** — CORS headers alone don't prove
-it's safe.
+**Call `core/src/<platform>.ts`'s `fetch*` functions directly from the client — this is
+now the shipped, review-verified default, not a fallback for when a proxy "can't be
+justified."** An earlier version of this checklist argued the opposite (route through a
+server-side proxy by default, reasoning that both platforms' real burst-rate-limit
+behavior — see the CORS bullet above — meant CORS support alone wasn't enough to trust
+client-side calls). Real review on #112 rejected that conclusion once it was checked
+against how the feature is actually used: *"I don't think we need to route anything to
+the server, just to try avoiding the request limits. These imports don't happen that
+often and shouldn't trigger the restrictions."* `core/src/<platform>.ts`'s `fetch*`
+functions are framework-free/pure by design, so they're callable from either side — take
+that at face value and call them straight from wherever resolution is needed
+(`item-factories.ts` for this skill's single-item case; see `tapestry-collection-imports`
+for the collection-list case, which has its own client-specific piece, an in-memory
+Wikimedia cursor store, but still no server round-trip). **The synthetic burst-test
+finding above is still real and worth knowing**, but it describes the platform's limit,
+not a limit this feature's real traffic pattern actually reaches — don't route through a
+server-side proxy pre-emptively "to be safe" once you've confirmed CORS support; add one
+only if a specific, real usage pattern is later shown to need it.
 
 ## Design consideration: import-by-reference vs. a real copy
 
@@ -267,8 +278,8 @@ per-item pasted URL exists there, so it reconstructs a canonical link instead).
 4. **Prefer the platform's own media/content-type field over MIME sniffing** when one
    exists, and narrow ambiguous types by MIME rather than guessing.
 5. **This skill is single-item only.** Recognizing a *collection*/category/search-results
-   URL and offering a picker is a different, reusable mechanism (`IAImport` +
-   `HandleIAImportDialog`) — see `tapestry-collection-imports`.
+   URL and offering a picker is a different, reusable mechanism (`CollectionImport` +
+   `CollectionImportDialog`) — see `tapestry-collection-imports`.
 6. **Surface the by-reference-vs-copy question explicitly** rather than assuming either is
    correct for a new source (see above).
 7. See `tapestry-content-types` for the `core/` module conventions (defensive JSON
@@ -276,9 +287,14 @@ per-item pasted URL exists there, so it reconstructs a canonical link instead).
    related "recognize a URL, do something special" family this sits alongside.
 8. **Record the originally-pasted URL in `notes`** when the resolved `source` points
    somewhere the user won't recognize (see the design-consideration section above).
-9. **CORS headers on a single request don't prove client-side calls are safe** — check
-   burst/concurrent-request behavior with a real test before skipping the server-side
-   proxy. Route through it by default for any platform with real user traffic.
+9. **Call the platform's API directly from the client once CORS is confirmed — this is
+   the default, not a fallback.** A synthetic concurrent-request burst test is still
+   worth running so you know the platform's real limits, but don't let that alone send
+   you to a server-side proxy: check whether the feature's actual usage pattern (not a
+   synthetic stress test) is likely to reach those limits first, and prefer a narrower
+   client-side fix (like disabling an unrelated background-reload default) over
+   server-side infrastructure if one exists. Real review corrected an earlier version of
+   this guardrail that argued the opposite — see the "server-side proxy" section above.
 10. **For video/audio platforms, check for and prefer a browser-compatible derivative**
     (a transcode) over the platform's "original" file, and verify actual playback in a
     real browser — a network-level "the URL loads" check is not the same as "the browser
