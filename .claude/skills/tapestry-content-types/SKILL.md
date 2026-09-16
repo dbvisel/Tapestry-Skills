@@ -13,7 +13,8 @@ skill_discovery_hints:
   - keywords: ["heic-to", "libheif-js", "heic2any", "WASM decoder license", "worker queue contention"]
   - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
   - keywords: ["Clover IIIF", "full third-party viewer component", "reuse viewer library vs hand-roll", "accept known library bug", "OpenSeadragon addSimpleImage bug"]
-last_verified: 2026-09-11
+  - keywords: ["skipSourceResolution not needed", "no server-side resolution", "which factory should own this URL", "IA image item iiif factory", "schema derivation fewest exclusions"]
+last_verified: 2026-09-16
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -76,17 +77,25 @@ this. Before writing anything:
 
 - **Put format-specific parsing/resolution logic in exactly one place**: a new, pure,
   framework-free module under `core/` (no React, no DB, no server-only imports — see
-  `core/src/iiif.ts` for the shape: manifest fetching, version-tolerant JSON navigation, a
-  thumbnail-URL builder). Import that module from **both** the client item-factory and the
-  server-side resolution code, rather than writing the parsing logic twice. The reference
-  implementation calls the exact same `fetchIIIFFirstCanvas` from
-  `client/src/stage/item-factories.ts` (client-side resolution when the browser can do it)
-  and `server/src/resources/items.ts` (server-side resolution when it can't, e.g. direct
-  API creation) — one function, two call sites.
-- **Reuse existing generic escape hatches instead of inventing new ones.** The new type's
-  server-side source resolution reused the *existing* `item.skipSourceResolution` flag
-  (already used by `webpage` items) to mean "the client already resolved this, don't redo
-  the work" — it didn't add a second, type-specific flag with the same meaning.
+  `core/src/iiif.ts`). Import it from every call site that needs the same check, rather
+  than writing the parsing logic twice. **This module's own shape should track what's
+  actually still needed, not accumulate across rewrites**: PR #77's version hand-parsed a
+  manifest to resolve one canvas's image service (`fetchIIIFFirstCanvas`, called from both
+  the client item-factory and server-side resolution). PR #123 replaced Clover IIIF's own
+  manifest parser (`@iiif/parser`) for that, so the module shrank to just
+  `fetchIIIFManifest`/`isIIIFManifest`/`fetchIIIFCanvasCount` — confirming a URL is a real
+  manifest and counting its canvases, nothing else.
+- **`skipSourceResolution` means "opt out of server-side resolution that would otherwise
+  run" — it is not a general "the client already resolved this" marker, and most new
+  types won't need it at all.** PR #77's IIIF factory set it because the server originally
+  had its own `resolveIiifSource` function to skip. PR #123 removed that server-side
+  function entirely once review made the point directly: *"I don't think we should
+  resolve the iiif source at all ... It is the client's responsibility to provide the
+  correct data format, as it is with pdfs and e-books"* (see `tapestry-pr-conventions`).
+  With no server-side resolution left to skip, the flag became pointless for iiif and was
+  removed too. **If your new type's server never validates or rewrites the source at all**
+  (true of `pdf`, `book`, and now `iiif`) — it needs neither a `resolve<X>Source` function
+  nor this flag. Only add both when the server genuinely has something to skip.
 - **Prefer additive schema changes.** A new discriminated-union variant plus one new
   nullable column is enough for most new types; you should rarely need to touch existing
   types' fields.
@@ -159,7 +168,7 @@ lowercase-`type`/PascalCase-class convention exactly.
     component, which takes the plain manifest URL and does its own fetching, parsing, and
     multi-canvas UI — deleting most of the hand-rolled manifest-navigation code from the
     `core/` module (see step 2) in exchange for the third-party library owning a real,
-    documented OpenSeadragon bug outright (see `tapestry-pr-conventions` point 18: the
+    documented OpenSeadragon bug outright (see `tapestry-pr-conventions` point 16: the
     reviewer explicitly preferred accepting a known limitation over adding a workaround
     that only partially covered the bug). **When a new type's format has an existing,
     full-featured viewer library** (not just a low-level rendering primitive), prefer
@@ -230,15 +239,26 @@ lowercase-`type`/PascalCase-class convention exactly.
     validate or normalize the source, etc. In that case: recognize sources for this type
     (URL pattern / metadata probing), resolve whatever's needed using your new `core/`
     module, build the item via the existing `createMediaItem(type, source, tapestryId)`
-    helper, set any type-specific fields on the returned item, and set
-    `item.skipSourceResolution = true` if you've already done resolution the server would
-    otherwise redo.
+    helper, and set any type-specific fields on the returned item (see the guiding
+    principle above on when `item.skipSourceResolution` is actually warranted — for most
+    new types it isn't).
+
+    **If your new type can be recognized from an Internet Archive URL, let the existing IA
+    factory (`iaFactory`) recognize that URL and create your item, rather than writing
+    IA-URL-parsing logic into your new factory too.** IIIF's own factory originally
+    special-cased an IA image-type item itself (parsing the URL, checking its mediatype,
+    building a manifest URL) before falling through to `iaFactory` for every other IA case
+    — review moved that into `iaFactory` instead, which now creates the iiif item directly
+    once it sees `mediatype === 'image'` (falling back to its own generic embedded-item
+    path if the manifest doesn't resolve), leaving the IIIF factory with only the cases
+    that are genuinely about a manifest URL itself (see `tapestry-pr-conventions` point
+    21). Recognizing "this is an IA URL" is `iaFactory`'s whole job; don't duplicate that
+    recognition in a factory for one of its sub-cases.
 
     Either way, insert the factory into the `ITEM_FACTORIES` array at the right priority —
-    before any catch-all factory (`webpageItemFactory` is always last), and before/after
-    IA-collection handling depending on whether your type should intercept IA URLs first.
-    Return `null` (not throw) for anything that isn't actually your type, so later factories
-    still get a chance.
+    before any catch-all factory (`webpageItemFactory` is always last). Return `null` (not
+    throw) for anything that isn't actually your type, so later factories still get a
+    chance.
 17. **`client/src/lib/media.ts`** — add a `get<X>ItemSize(source)` function computing the
     item's default/initial size, **if** there's a meaningful intrinsic size/aspect ratio to
     derive (e.g. from fetched metadata). If there isn't — `model3d` has no natural 2D aspect
@@ -259,6 +279,17 @@ lowercase-`type`/PascalCase-class convention exactly.
     *older* client/viewer opening an export containing the new item type can detect "this
     file is a version I don't fully understand" rather than silently mis-rendering or
     crashing on an unrecognized `type`.
+
+    **If your new type's own export schema is a shortcut derived from an existing type's
+    (e.g. `z.object({ ...ExistingItemSchemaV7.omit({ type: true, someField: true }).shape,
+    type: z.literal('<x>') })`), pick the existing type that needs the fewest fields
+    omitted, not just the first structurally-similar one.** `IiifItemSchemaV7` first
+    derived from `ImageItemSchemaV7`, which meant omitting the click-action fields
+    (`actionType`, `action`) image items have but iiif doesn't; review pointed out
+    `BookItemSchemaV7` never had those fields to begin with, so deriving from it instead
+    only needs to omit `type` (see `tapestry-pr-conventions` point 24). A smaller
+    omit-list is also a more accurate signal of how closely related the two types really
+    are.
 20. **`core/src/data-format/export/index.ts`** — bump the previous version's parser to
     target the new version (`class ParserV<N> extends ExportParser<ExportV<N+1>>`, its
     `parseInternal` just returns `{ ...tapestry, version: <N+1> }` when the change really is
@@ -482,8 +513,9 @@ out here deliberately rather than papered over with an assumed number.
 
 1. **One shared `core/` module for format logic, called from both client and server** —
    never duplicate parsing/resolution logic across the two.
-2. **Reuse `skipSourceResolution`** for "client already did this" rather than adding a new,
-   type-specific flag with the same meaning.
+2. **Only add server-side resolution (and `skipSourceResolution`) if the server genuinely
+   has something to skip.** Most new types need neither — `pdf`, `book`, and `iiif` all
+   trust whatever the client sends, with no server-side resolution function at all.
 3. **New DB columns are nullable.** Every existing item type's existing rows must remain
    valid.
 4. **Bump the export version (step 19-20) for any change to `core/src/data-format/schemas/item.ts`.**
@@ -537,8 +569,8 @@ out here deliberately rather than papered over with an assumed number.
 14. **Prefer a full-featured third-party viewer/renderer library's own top-level component
     over hand-rolling the surrounding state and UI**, when the format already has one —
     even if it means inheriting a real bug in the library rather than working around it
-    (see step 10's IIIF note and `tapestry-pr-conventions` point 18). Before building a
+    (see step 10's IIIF note and `tapestry-pr-conventions` point 16). Before building a
     workaround for an apparent gap in any dependency (a missing feature, an undeclared
     sub-dependency), open that dependency's actual `package.json` in `node_modules` and
     check — don't assume from documentation, an earlier read, or memory of it
-    (`tapestry-pr-conventions` point 19).
+    (`tapestry-pr-conventions` point 17).

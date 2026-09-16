@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, don't fall back where the primary signal is already reliable, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name, put type-specific branching in the factory/dispatcher that owns recognizing that input shape, nest CSS selectors instead of repeating a parent one, audit the whole branch diff against main for scope creep before every round, and pick the schema-derivation base needing the fewest exclusions — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -18,12 +18,16 @@ skill_discovery_hints:
   - keywords: ["maps instead of ternaries", "per-branch config function", "ternary sprawl", "discriminant field dispatch"]
   - keywords: ["reject server-side proxy", "CORS instead of proxy", "autoReload false", "rate limit background reload"]
   - keywords: ["direct union member vs nested platform union", "rename type outgrows scope", "flatten nested discriminated union"]
-last_verified: 2026-09-14
+  - keywords: ["factory ownership", "ItemFactory input shape", "IA image item iiif", "which factory should own this"]
+  - keywords: ["CSS nesting", "repeated parent selector", "nest selectors under .root"]
+  - keywords: ["unrelated change outside task scope", "whole branch diff against main", "leftover change from earlier round", "stray formatting change"]
+  - keywords: ["schema derivation base", "fewest field exclusions", "closest semantic match", "export version schema"]
+last_verified: 2026-09-16
 ---
 
 What real reviewers at `asteasolutions/tapestry-project` actually asked for, across
 nine-plus real review rounds on four real PRs (plus one direct follow-up question from
-zmarinov-astea, outside GitHub — see point 13): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
+zmarinov-astea, outside GitHub — see point 11): [#96](https://github.com/asteasolutions/tapestry-project/pull/96)
 (the IA search-query bulk-import feature — see `tapestry-collection-imports`, which this
 skill's findings were first folded into before being generalized out here),
 [#109](https://github.com/asteasolutions/tapestry-project/pull/109) (client-side HEIC
@@ -31,15 +35,15 @@ import — see `tapestry-content-types`' variation section),
 [#123](https://github.com/asteasolutions/tapestry-project/pull/123) (Clover IIIF viewer
 rework — see `tapestry-content-types`' IIIF reference), and
 [#112](https://github.com/asteasolutions/tapestry-project/pull/112) (Openverse/Wikimedia
-Commons collection import — see `tapestry-collection-imports`, points 20-22). **Points
-1-13 and 18-22 are all `zmarinov-astea`**, verified across all four PRs — feedback that
+Commons collection import — see `tapestry-collection-imports`, points 18-20). **Points
+1-11 and 16-24 are all `zmarinov-astea`**, verified across all four PRs — feedback that
 recurs in the same shape across unrelated features is a stable preference of that
-gatekeeper, not a one-PR quirk. **Points 14-17 are a second reviewer, `Sachanski`**, on a
+gatekeeper, not a one-PR quirk. **Points 12-15 are a second reviewer, `Sachanski`**, on a
 later round of PR #109 and a round of PR #96 — their feedback so far is consistent in
 spirit with `zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the
 strongest real signal), so treat both as this repo's actual review bar rather than one
 person's idiosyncrasy, but keep the attribution honest since it's only been one round
-each from Sachanski so far — less evidence than points 1-13/18-22 have. Every piece of feedback below was
+each from Sachanski so far — less evidence than points 1-11/16-24 have. Every piece of feedback below was
 phrased as a general principle, not a feature-specific nitpick, so treat it as worth
 applying proactively on any future PR to this project rather than waiting to be told
 again. Whoever is about to open or update a PR here — this skill is meant to be run as a
@@ -54,7 +58,7 @@ consulted after a reviewer has already commented.
 - Replying to or resolving PR review comments via `gh`
 - Any skill in this repo whose checklist ends in "open a PR" should point here
 
-## What this reviewer actually asked for, verified across six rounds on two PRs
+## What this reviewer actually asked for, verified across nine-plus rounds on four PRs
 
 1. **Don't add a near-duplicate sibling next to an existing near-identical one — merge
    them and parameterize by whatever actually differs.** Round 1: a new `search-list/`
@@ -105,17 +109,34 @@ consulted after a reviewer has already commented.
    `tab=collection` is a real value that still had to be rejected because it would
    contradict this feature's own mandatory collection-exclusion. Verify each value against
    the real service rather than assuming a parameter is safe to pass through wholesale.
-6. **Trust the strongest signal already available before falling back to a weaker derived
-   one.** PR #109, round 1: a new `heicImageFactory` decided "is this HEIC" purely from a
+6. **Trust the strongest signal already available before re-deriving a weaker one, scope
+   any fallback to only the branch that actually needs it, and trace an argument to its
+   real source before assuming you must re-derive part of it.** PR #109, across three
+   rounds on the same `heicImageFactory`. Round 1: it decided "is this HEIC" purely from a
    filename extension, even though the surrounding pipeline (`parseMediaSource`) had
    already resolved a real `mediaType` (from the browser's `File.type`, a mime lookup, or
-   the server's content-type proxy for a URL) and was passing it in as an argument the
-   factory ignored. Reviewer: *"This is not a reliable way to check if the source is a
-   heic image. We should first check the mediaType if it is image/heic or image/heif ...
-   if not, proceed only if the file extension is heic or heif."* The generalizable shape:
-   when a stronger signal is already sitting in scope (an argument, a prior resolution
-   step), check it first — don't re-derive a weaker approximation of the same fact from
-   scratch and let the strong one go unused.
+   the server's content-type proxy for a URL) and passed it in as an argument the factory
+   ignored. Reviewer: *"This is not a reliable way to check if the source is a heic
+   image. We should first check the mediaType if it is image/heic or image/heif ... if
+   not, proceed only if the file extension is heic or heif."* Round 2: the fix applied
+   that extension fallback to *both* File and URL sources uniformly — but a URL source's
+   `mediaType` comes from the server's content-type proxy and never gets unreliable the
+   way a browser's `File.type` can be empty, so the fallback there was solving a problem
+   that doesn't occur. Reviewer, using their own earlier word: *"This is again too
+   complicated, if the given mediaType is not heic, check the filename extension only if
+   the source is a File."* (Same shape as point 8's unused generality, but about a whole
+   branch's behavior, not dead code in a helper.) Round 3 (an otherwise-approving review):
+   even the File-only fallback looked redundant on its own terms, since a `File` source's
+   `mediaType` resolution (`getMediaType`) already falls back to the identical
+   `mime.getType(source.name)` lookup before ever reaching this factory. Reviewer: *"Can
+   we use only HEIC_MEDIA_TYPES.includes for our isHeic check? The extension is already
+   read at line 362 (mime.getType(source.name) ?? '') in
+   client/src/model/data/utils.ts."* **One caveat, found a round later (point 11):
+   "strictly redundant" was itself an overclaim** — tracing an argument to its source
+   tells you what the *common case* produces, not that every input reaches that source
+   the same way; a value can be non-empty without being meaningful (point 11), which is
+   exactly what let this specific fallback matter after all. Check the upstream logic's
+   boundary conditions, not just that a source exists.
 7. **Match the full input space of the pipeline you're plugging a new branch into — don't
    silently narrow it to whatever you tested with.** Same comment, second half: *"If the
    source is a link, download the image first, and then use maybe mediaSourceToBlob."*
@@ -140,52 +161,20 @@ consulted after a reviewer has already commented.
    point 7's fix made the factory accept URL sources too. The lesson isn't "never
    generalize," it's "put the generalization at the point that actually needs it, not
    inside a helper whose own contract doesn't call for it."
-9. **Don't build a fallback path for an input branch that already has a fully reliable
-   primary signal.** PR #109, round 2, on the round-1 fix to point 6/7 above: *"This is
-   again too complicated, if the given mediaType is not heic, check the filename extension
-   only if the source is a File."* The round-1 fix had applied the extension-fallback to
-   *both* File and URL sources, deriving a filename from the URL's path just to have
-   something to check. But a URL source's `mediaType` always comes from the server's
-   content-type proxy — it doesn't get meaningfully less reliable the way a browser's
-   `File.type` can be empty — so a fallback for that branch was solving a problem that
-   doesn't occur. **"Again"** is the reviewer's own word: this is the same shape as point
-   8 (unused generality), but about a whole conditional branch's *behavior*, not dead code
-   in a helper — reserve fallback/defensive logic for the specific input branch where the
-   primary signal can genuinely be missing, not every branch uniformly.
-10. **Pass data in the loosest type the actual API accepts — don't wrap/reshape it to fit
-    an assumed stricter interface, and don't manufacture metadata nothing downstream
-    reads.** Same round, a second comment: *"Why are we creating a new file when the
-    heic-to module can accept a simple Blob? Also when then returned file from
-    convertHeicFile can have a random filename, it is not important, for example
-    converted.jpg."* The code wrapped a downloaded `Blob` in a `new File(...)` purely to
-    satisfy a `File`-typed parameter that turned out to be assumed, not required —
-    `heic-to`'s `heicTo({ blob, ... })` takes a plain `Blob`, and the "real" filename it
-    was being constructed to carry was never read by anything after conversion. Check the
-    library's actual signature before reshaping data to match a narrower type than it
-    needs, and don't thread a piece of information through a data structure just because
-    the type technically wants a name for it — a fixed placeholder (`converted.jpg`) is
-    fine when nothing consumes the value.
-11. **Before deriving a fact yourself, check whether an argument you already have fully
-    subsumes that derivation somewhere upstream in the same call chain — not just
-    whether a *stronger signal exists* (point 6), but whether the strong signal already
-    *is* the weak one plus more.** PR #109, round 3 (an otherwise-approving review):
-    *"Can we use only HEIC_MEDIA_TYPES.includes for our isHeic check? The extension is
-    already read at line 362 (mime.getType(source.name) ?? '') in
-    client/src/model/data/utils.ts."* Point 6 had already moved mediaType to be checked
-    first, but kept a same-shaped extension fallback "just in case" mediaType came back
-    empty — missing that for a `File` source, `mediaType`'s own resolution (`getMediaType`)
-    *already* falls back to the exact same `mime.getType(source.name)` lookup before ever
-    reaching this factory. The fallback looked strictly redundant — checking the extension
-    a second time seemed like it could never produce a different answer.
-    Trace an argument back through what actually produced it before assuming you need to
-    re-derive part of it defensively. **Caveat, found one round later (point 13): "strictly
-    redundant" was itself an overclaim** — it only followed from assuming `getMediaType`'s
-    fallback triggers whenever the extension check would help, which turned out to be false
-    for a specific truthy-but-generic value. Tracing an argument to its source tells you
-    what the *common case* produces; it doesn't by itself prove every input reaches that
-    source the same way — check the boundary conditions of the upstream logic too, not just
-    that it exists.
-12. **When a reviewer asks you to verify platform-specific runtime behavior you have no
+9. **Pass data in the loosest type the actual API accepts — don't wrap/reshape it to fit
+   an assumed stricter interface, and don't manufacture metadata nothing downstream
+   reads.** PR #109, round 2, a second comment: *"Why are we creating a new file when the
+   heic-to module can accept a simple Blob? Also when then returned file from
+   convertHeicFile can have a random filename, it is not important, for example
+   converted.jpg."* The code wrapped a downloaded `Blob` in a `new File(...)` purely to
+   satisfy a `File`-typed parameter that turned out to be assumed, not required —
+   `heic-to`'s `heicTo({ blob, ... })` takes a plain `Blob`, and the "real" filename it
+   was being constructed to carry was never read by anything after conversion. Check the
+   library's actual signature before reshaping data to match a narrower type than it
+   needs, and don't thread a piece of information through a data structure just because
+   the type technically wants a name for it — a fixed placeholder (`converted.jpg`) is
+   fine when nothing consumes the value.
+10. **When a reviewer asks you to verify platform-specific runtime behavior you have no
     access to (a real Windows machine, in this case), do the closest available research
     and disclose it as research, not as an empirical test — don't skip it, and don't
     silently present it with the same confidence as something you actually ran.** Same
@@ -208,9 +197,9 @@ consulted after a reviewer has already commented.
     present from `1.15-1` (Ubuntu 20.04) onward. **When the literal target platform is
     inaccessible but a real, cheaply-spun-up adjacent system shares the underlying
     mechanism, actually testing that adjacent system beats researching the original one** —
-    it produced the concrete finding in point 13 below, which pure Windows documentation
+    it produced the concrete finding in point 11 below, which pure Windows documentation
     reading would not have surfaced.
-13. **A non-empty return value isn't automatically a reliable positive signal — some
+11. **A non-empty return value isn't automatically a reliable positive signal — some
     values are themselves "I don't know" sentinels.** Following up on the Linux testing
     above (not a reviewer comment, but the same real gatekeeper's original design
     question, relayed directly rather than through a PR comment thread): *"should we
@@ -226,7 +215,7 @@ consulted after a reviewer has already commented.
     while still trusting every other concrete value. Don't let "does this value exist"
     stand in for "does this value mean anything."
 
-14. **Colocate a small, one-off helper with its closest sibling in an existing file —
+12. **Colocate a small, one-off helper with its closest sibling in an existing file —
     don't give it a dedicated single-function file.** PR #109, Sachanski's round:
     `convertHeicFile` lived alone in a new `client/src/lib/heic.ts`. Reviewer asked for
     it to move into the existing `client/src/lib/media.ts`, next to `compressImage` —
@@ -236,35 +225,36 @@ consulted after a reviewer has already commented.
     functions doing the same *kind* of work (here: "transform a media file for import")
     and put the new one there instead — a dedicated file is for something that actually
     needs its own module boundary, not every helper that happens to be new.
-15. **The strongest available signal for "what kind of file is this" is the file's own
+13. **The strongest available signal for "what kind of file is this" is the file's own
     bytes, not its name, extension, or browser-reported MIME type — and an
     already-installed dependency may already do this.** PR #109, Sachanski's round,
-    superseding the entire mediaType/extension back-and-forth in points 6, 9, 11, and 13
-    above: after four rounds across two reviewers debating which of `File.type` or a
-    filename extension to trust and when, Sachanski's fix used `fileTypeFromBlob`/
+    superseding the entire mediaType/extension back-and-forth debated in point 6 and
+    point 11 above: after four rounds across two reviewers debating which of `File.type`
+    or a filename extension to trust and when, Sachanski's fix used `fileTypeFromBlob`/
     `fileTypeFromBuffer` from the `file-type` package — already a project dependency,
     already imported elsewhere in this same file (`item-factories.ts`) for `.webloc`
     detection — to read the file's actual magic bytes instead of trusting either weaker
-    signal. This is stronger than either signal points 6-13 debated: a browser-reported
-    `mediaType` can be empty or a generic sentinel (point 13), and a filename extension
-    can be wrong or missing outright (the original concern zmarinov-astea raised in
-    point 6 was specifically "an incorrect or missing extension on some Linux systems"
-    — magic-byte sniffing satisfies that concern directly, without needing any
-    extension fallback at all). **The lesson isn't just "use file-type instead of mime"
-    — it's that none of us (across two reviewers and four rounds) checked whether an
-    even more authoritative signal than the ones being argued about was already sitting
-    in the codebase as a dependency.** Before extending a signal-priority chain (weak
-    signal → weaker fallback → weakest fallback), check whether the *strongest possible*
-    signal (the actual file content) is available and already has a library for it,
-    rather than only ever choosing between the signals already in the discussion.
-16. **Don't write an explicit return type annotation when it's inferred and
+    signal. This is stronger than either signal point 6 or point 11 debated: a
+    browser-reported `mediaType` can be empty or a generic sentinel (point 11), and a
+    filename extension can be wrong or missing outright (the original concern
+    zmarinov-astea raised in point 6 was specifically "an incorrect or missing extension
+    on some Linux systems" — magic-byte sniffing satisfies that concern directly, without
+    needing any extension fallback at all). **The lesson isn't just "use file-type
+    instead of mime" — it's that none of us (across two reviewers and four rounds)
+    checked whether an even more authoritative signal than the ones being argued about
+    was already sitting in the codebase as a dependency.** Before extending a
+    signal-priority chain (weak signal → weaker fallback → weakest fallback), check
+    whether the *strongest possible* signal (the actual file content) is available and
+    already has a library for it, rather than only ever choosing between the signals
+    already in the discussion.
+14. **Don't write an explicit return type annotation when it's inferred and
     unambiguous.** PR #109, Sachanski's round: `convertHeicFile(blob: Blob):
     Promise<File>` had its `Promise<File>` return type annotation removed on request —
     TypeScript already infers it correctly from the function body, and the codebase's
     existing convention (e.g. `compressImage` right next to it) doesn't annotate
     inferred return types either. Match the surrounding file's own convention on this
     rather than adding an annotation "for clarity" by default.
-17. **A TODO comment is the one exception to point 4's "no comments" bar — but only
+15. **A TODO comment is the one exception to point 4's "no comments" bar — but only
     when a reviewer explicitly asks for exactly that, to flag a deliberately-deferred
     piece of cleanup.** PR #96, Sachanski's round: the reviewer flagged real, sizeable
     duplication between two branches of `ImportDetails` (an IA-shaped branch and the
@@ -277,7 +267,7 @@ consulted after a reviewer has already commented.
     has agreed to defer, not an explanation of current logic. Add the TODO with
     (approximately) the reviewer's own wording when this happens; don't extend it into
     a general license to leave TODOs for deferred cleanup on your own initiative.
-18. **Reject a partial workaround for a rare upstream-library bug in favor of accepting
+16. **Reject a partial workaround for a rare upstream-library bug in favor of accepting
     it as a known limitation — especially when the workaround doesn't even fully solve
     the problem.** [PR #123](https://github.com/asteasolutions/tapestry-project/pull/123)
     (Clover IIIF viewer rework, zmarinov-astea): a real, reproducible OpenSeadragon bug
@@ -291,8 +281,8 @@ consulted after a reviewer has already commented.
     shape: a workaround that only covers part of a bug's surface, at the cost of a real
     second code path, is a worse trade than documenting the bug as a known limitation and
     keeping one code path — same "avoid unneeded complexity for an edge case" instinct as
-    points 8/9, extended from data-shape fallbacks to a third-party UI library's own bug.
-19. **Verify a suspected "this dependency doesn't declare what it needs" claim by reading
+    points 6 and 8, extended from data-shape fallbacks to a third-party UI library's own bug.
+17. **Verify a suspected "this dependency doesn't declare what it needs" claim by reading
     that dependency's own `package.json`, not by trusting an earlier, unverified read of
     it.** Same PR, same reviewer: after I added a Vite `resolve.alias` (routing
     `@asteasolutions/epub-reader`'s internal bare `lodash` import to the already-declared
@@ -305,7 +295,7 @@ consulted after a reviewer has already commented.
     a problem that did not exist. Before building a workaround for an apparent dependency
     gap, read the actual `package.json` (or lockfile entry) in `node_modules`, not a
     summary or a prior session's memory of it.
-20. **Replace a ternary chain branching on a discriminant field with one function
+18. **Replace a ternary chain branching on a discriminant field with one function
     returning a per-branch config object, once there's more than one such branch or
     once extensibility comes up.** [PR #112](https://github.com/asteasolutions/tapestry-project/pull/112)
     (Openverse/Wikimedia Commons collection import): a component had five separate
@@ -322,7 +312,7 @@ consulted after a reviewer has already commented.
     without an unsafe cast, so a function with an early return per branch is the
     correct TypeScript idiom, and satisfies the same underlying ask (adding a branch
     means touching one place, not every scattered ternary).
-21. **Don't reach for a server-side proxy to protect a rate-limited third-party API
+19. **Don't reach for a server-side proxy to protect a rate-limited third-party API
     before checking whether it's actually needed.** Same PR: a first draft routed every
     Openverse/Wikimedia Commons request through a server-side proxy with a Redis cache,
     reasoning that centralizing and caching requests would reduce the chance of
@@ -342,7 +332,7 @@ consulted after a reviewer has already commented.
     real trigger is something narrower and already fixable client-side, like a
     background-polling default — a proxy is the more complex fix and should lose to a
     simpler one whenever either check comes back favorable.
-22. **Give a discriminated union direct members per real-world case — don't nest a
+20. **Give a discriminated union direct members per real-world case — don't nest a
     second dimension (like a platform) inside one shared member.** Same PR: a first
     draft added one `ExternalCollection` union member shaped as `{ type:
     'ExternalCollection'; total: number } & ({ platform: 'openverse'; ... } | {
@@ -362,6 +352,50 @@ consulted after a reviewer has already commented.
     specific case starts serving a second, different case**: check whether its name is
     still accurate, and whether a wrapper/nesting shape it uses to "save" top-level
     members should just be flattened into direct ones instead.
+21. **When two polymorphic factories could both match the same input shape, put the
+    type-specific branching in the factory that owns recognizing that shape — not in a
+    more specific, downstream type's factory.** PR #123, a later round: `iiifItemFactory`
+    special-cased an Internet Archive image-type item itself (parsing the IA URL,
+    checking its mediatype, building a manifest URL) before falling through to
+    `iaFactory` for every other IA case. Reviewer: *"Handle the IA image item import in
+    the IA factory and create the iiif media item for it there."* Moved: `iaFactory` now
+    creates the iiif item directly once it sees `mediatype === 'image'` (falling back to
+    its own generic embedded-item path if the manifest doesn't resolve), and
+    `iiifItemFactory` was left with only the two cases that are genuinely about a
+    manifest URL itself (a viewer's shareable link, a direct manifest URL) — not IA
+    parsing at all. The generalizable shape: recognizing "this URL is an IA URL" is
+    `iaFactory`'s whole job; a sibling factory reaching into that same recognition logic
+    to intercept one sub-case duplicates ownership of it, even though the two factories
+    don't otherwise overlap.
+22. **Nest CSS selectors under one parent rule instead of repeating the parent selector
+    for each override.** PR #123, same round, on a `styles.module.css` with several
+    separate `.root :global(...)` top-level rules: *"We don't need several .root
+    selectors since selectors can be nested here."* This project's CSS pipeline supports
+    native nesting, so every one of those became a nested `:global(...)` block inside
+    the single `.root { }` rule instead of its own top-level selector repeating `.root`.
+23. **An unrelated, leftover change from earlier work on the branch gets caught even
+    many rounds later — it doesn't age out.** Verified twice, different files, different
+    rounds: *"please don't change code that is outside the scope of the current task"*
+    (a `core-client` component's event-handler type, changed rounds earlier to satisfy a
+    since-superseded toolchain issue) and, a later round, *"Please don't modify this
+    socket file. It is not related at all to the current task"* (a `shared/` file with a
+    stray comment/formatting change from even earlier work on the same branch). Neither
+    was touched in the round that introduced the *actual* task at hand — both were
+    pre-existing drift on the branch that a reviewer noticed independently of whatever
+    was newly changed. Before opening or updating a PR, diff the **whole branch** against
+    upstream `main` (not just the files edited this round) and revert anything that
+    doesn't belong to the current task's real scope, even if it's been sitting there for
+    several rounds already.
+24. **When deriving a new schema/type from an existing similar one as a shortcut, pick
+    the base that needs the fewest field exclusions to reach the target shape — the
+    closest semantic match, not just the first structurally-similar one.** PR #123, same
+    round: `IiifItemSchemaV7` derived from `ImageItemSchemaV7`, which meant explicitly
+    omitting the click-action fields (`actionType`, `action`) image items have but iiif
+    items don't. Reviewer suggested deriving from the book schema instead: *"I think it
+    would be cleaner if you derive it from the book schema."* `BookItemSchemaV7` never
+    had those action fields to begin with, so the derivation only needs to omit `type` —
+    a smaller, more accurate diff, and a schema that no longer silently carries "these
+    fields exist on the base but get stripped back off" as an implicit contract.
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -382,95 +416,103 @@ checkable without waiting for a live comment:
 5. **Live behavior** — does this depend on how an external service or site actually
    behaves? Verify against the real thing before claiming it's handled, not just docs or
    memory (point 5).
-6. **Signal strength** — is this re-deriving a fact (a format, a type) from a weak signal
-   (a filename extension, a guess) when a stronger one (an already-resolved value passed
-   in as an argument, a prior computation) is sitting unused in scope? Use the strong
-   signal first, and only fall back to the weak one when the strong one is unavailable
-   (point 6).
+6. **Signal strength** — is this re-deriving a fact from a weak signal (a filename
+   extension, a guess) when a stronger one (an already-resolved argument, a prior
+   computation) is sitting unused in scope? Use the strong signal first. If a fallback is
+   genuinely needed, scope it to only the branch that actually lacks a reliable signal,
+   and trace the argument back to what actually produced it first — it may already
+   incorporate the fallback you're about to re-add (point 6).
 7. **Pipeline scope** — does this add a branch/case to an existing polymorphic pipeline
    (an `ItemFactory`, a dispatcher, anything that already accepts more than one input
    shape)? Confirm it covers every shape the pipeline itself already supports, not just
    the one you happened to test with (point 7).
 8. **Dead/speculative code** — does any logic handle an input shape nothing currently
    passes to it? Remove it; add it back only once a real caller needs it (point 8).
-9. **Uniform fallbacks** — if a fallback/defensive path is applied identically across
-   every branch of an input, check whether every branch actually needs it — a branch
-   with an already-fully-reliable primary signal doesn't need the same fallback as one
-   that doesn't (point 9).
-10. **Type-fitting** — does this wrap or reshape a value (e.g. a `Blob` into a `File`)
-    to satisfy a parameter type before checking whether the actual function called
-    needs the narrower type at all? Check the real signature first. Does it also
-    manufacture a piece of metadata (a filename, an id) that nothing downstream reads?
-    Drop it (point 10).
-11. **Trace it upstream** — before writing your own fallback/derivation for a value, check
-    what actually produced the argument you already have. If it already incorporates the
-    fallback you're about to re-add, yours is dead weight even though it looks defensive
-    (point 11).
-12. **Can't test it live? Say so — but check for an adjacent system you actually can
+9. **Type-fitting** — does this wrap or reshape a value (e.g. a `Blob` into a `File`)
+   to satisfy a parameter type before checking whether the actual function called
+   needs the narrower type at all? Check the real signature first. Does it also
+   manufacture a piece of metadata (a filename, an id) that nothing downstream reads?
+   Drop it (point 9).
+10. **Can't test it live? Say so — but check for an adjacent system you actually can
     test first.** If a reviewer's ask (or your own diff) depends on platform/environment
     behavior you can't run, look for a real, cheaply-accessible system that shares the
     underlying mechanism (a Docker image of a different OS, an installable package that
     embeds the platform database) before falling back to documentation research; whichever
     you end up doing, state plainly what was actually tested versus researched, including
-    what you couldn't rule out (point 12).
-13. **"Non-empty" isn't "meaningful."** When trusting an already-resolved value over
-    re-deriving it (point 6/11), check whether that value has known "I don't know"
+    what you couldn't rule out (point 10).
+11. **"Non-empty" isn't "meaningful."** When trusting an already-resolved value over
+    re-deriving it (point 6), check whether that value has known "I don't know"
     sentinels (`application/octet-stream`, and similar generic fallbacks elsewhere) that
     are truthy but carry no real information — treat those the same as missing, while
-    still trusting every other concrete value (point 13).
-14. **New single-purpose helper** — before giving a new function its own file, check
+    still trusting every other concrete value (point 11).
+12. **New single-purpose helper** — before giving a new function its own file, check
     whether an existing file already holds siblings doing the same kind of work and put
-    it there instead (point 14).
-15. **Is there a stronger signal available than the ones you're choosing between?**
+    it there instead (point 12).
+13. **Is there a stronger signal available than the ones you're choosing between?**
     Before picking a "least-bad" option among weak/derived signals (an extension, a
     possibly-empty MIME type), check whether the file's actual content is available and
-    an already-installed dependency can read it (point 15).
-16. **Inferred return types** — does a function have an explicit return type annotation
+    an already-installed dependency can read it (point 13).
+14. **Inferred return types** — does a function have an explicit return type annotation
     TypeScript would infer anyway? Check whether sibling functions in the same file
-    annotate theirs; if not, drop it (point 16).
-17. **Reviewer-requested TODO** — if a reviewer explicitly asks for a TODO marking
+    annotate theirs; if not, drop it (point 14).
+15. **Reviewer-requested TODO** — if a reviewer explicitly asks for a TODO marking
     deferred cleanup (not an immediate fix), add it with close to their own wording;
-    don't treat this as license to add other self-initiated TODOs (point 17).
-18. **Partial workaround vs. known limitation** — does a fix add a whole extra code path
+    don't treat this as license to add other self-initiated TODOs (point 15).
+16. **Partial workaround vs. known limitation** — does a fix add a whole extra code path
     to cover only part of a rare upstream bug's surface, while the bug still exists
     elsewhere? Consider documenting it as a known limitation instead of shipping the
-    extra path (point 18).
-19. **Dependency claims** — before adding a workaround for "this package doesn't declare
+    extra path (point 16).
+17. **Dependency claims** — before adding a workaround for "this package doesn't declare
     dependency X," open its actual `package.json` in `node_modules` and check. Don't
-    trust an earlier read, a summary, or memory of it (point 19).
-20. **Ternary sprawl** — does a component have more than one ternary/conditional
+    trust an earlier read, a summary, or memory of it (point 17).
+18. **Ternary sprawl** — does a component have more than one ternary/conditional
     branching on the same discriminant field, scattered across several concerns? Collapse
-    them into one function returning a per-branch config object instead (point 20).
-21. **Proxy-first instinct** — about to add a server-side proxy or cache to protect
+    them into one function returning a per-branch config object instead (point 18).
+19. **Proxy-first instinct** — about to add a server-side proxy or cache to protect
     against a third-party rate limit? Check real CORS support first, and check whether
     the actual trigger is something narrower (a list's own background-reload default)
-    that's fixable without server-side infrastructure at all (point 21).
-22. **Nested union vs. direct members, and a name that's outgrown its scope** — does a
+    that's fixable without server-side infrastructure at all (point 19).
+20. **Nested union vs. direct members, and a name that's outgrown its scope** — does a
     discriminated union nest a second dimension (a platform, a variant) inside one
     shared member instead of giving each case its own top-level member? And does the
     type/mechanism's name (or any identifier carrying it) still describe what it now
-    does, now that a second case exists? (point 22)
+    does, now that a second case exists? (point 20)
+21. **Factory/dispatcher ownership** — does one factory reach into another's input shape
+    (e.g. IA-URL parsing) to special-case a sub-type, instead of the factory that owns
+    recognizing that shape handling it directly? Move the branching to the owning
+    factory (point 21).
+22. **CSS selector repetition** — does a stylesheet repeat the same parent selector
+    (`.root :global(...)`) as several separate top-level rules? Nest them under one
+    parent block instead (point 22).
+23. **Whole-branch scope audit** — before opening or updating a PR, diff the whole
+    branch against upstream `main`, not just this round's edits. Revert anything that
+    doesn't belong to the current task, even if it's been there for several rounds
+    already (point 23).
+24. **Closest-match schema derivation** — when deriving a new type from an existing one,
+    does the base require excluding fields the target never had? Check whether a
+    different existing type needs fewer exclusions to reach the same shape (point 24).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
 minutes of self-review. Every point above earned its place in this list by actually
 costing a round-trip once already.
 
-**How this checklist has actually fared so far**: points 9-13 were all found on a
-*previous* round's fix, made before those points existed — so none of PR #109's rounds
-2-3-plus (including point 13's finding, which came through a direct message from the
-same reviewer rather than a fourth formal PR round) test the checklist; they're the
-reason points 9-13 exist at all. Round 3's *fix* (`48cc3e4`) was the first change
-actually run through this checklist (points 1-10, before 11-13 existed) before pushing —
-it came back clean, with one disclosed gap (point 12-shaped, before it had a number: live
-platform behavior that couldn't be tested, only researched) — a gap that then led
-straight to point 13's finding, meaning the checklist's own "disclose what you couldn't
-verify" habit is what surfaced the next real bug, not just a liability to manage. Whether
-a future fix draws a comment the checklist *should* have caught (because the relevant
-point already existed) or *couldn't* have caught (a genuinely new pattern) is the actual
-signal to watch for going forward — the former means "run it more carefully next time,"
-the latter means "add a new point," and both are useful, but only the former would mean
-the checklist itself has a gap.
+**How this checklist has actually fared so far**: the fallback-scoping and
+argument-tracing refinements now folded into point 6, plus point 11, were all found on a
+*previous* round's fix, made before those refinements were known — so none of PR #109's
+rounds 2-3-plus (including point 11's finding, which came through a direct message from
+the same reviewer rather than a fourth formal PR round) test the checklist; they're the
+reason those refinements exist at all. Round 3's *fix* (`48cc3e4`) was the first change
+actually run through an earlier version of this checklist before pushing — it came back
+clean, with one disclosed gap (point 10-shaped, before it had a number: live platform
+behavior that couldn't be tested, only researched) — a gap that then led straight to
+point 11's finding, meaning the checklist's own "disclose what you couldn't verify" habit
+is what surfaced the next real bug, not just a liability to manage. Whether a future fix
+draws a comment the checklist *should* have caught (because the relevant point already
+existed) or *couldn't* have caught (a genuinely new pattern) is the actual signal to
+watch for going forward — the former means "run it more carefully next time," the latter
+means "add a new point," and both are useful, but only the former would mean the
+checklist itself has a gap.
 
 **A third data point, from a different PR (#112, Openverse + Wikimedia Commons import)**:
 running the checklist against the full diff before opening the PR caught a real point-1
@@ -482,15 +524,18 @@ exactly the job it was built for: catching a point-1-shaped issue pre-review ins
 paying for it as a round-trip, on a PR where — unlike #109 — the checklist was run
 proactively from the start rather than reconstructed after the fact.
 
-**A growing list is itself worth watching**: this checklist is now 22 items, entirely
+**A growing list is itself worth watching**: this checklist is now 24 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
-correct for keeping it evidence-based, but a 22-item self-review pass risks becoming too
+correct for keeping it evidence-based, but a 24-item self-review pass risks becoming too
 long to actually run carefully every time — the opposite of the speed this was meant to
-buy. Point 15 is itself a sharp example of why consolidation matters here: it directly
-supersedes the entire 6/9/11/13 chain (a stronger signal — actual file content — was
-available the whole time and nobody checked). If it keeps growing, worth revisiting
-whether 6/9/11/13/15 can merge into one "trust the strongest signal, and periodically
-re-ask whether an even stronger one exists" point, rather than only ever appending.
+buy. Point 6 already absorbed one such consolidation: three separate points about signal
+priority, all refinements of the same debate across three review rounds on the same PR,
+merged into the one point 6 above. Point 11 (a value can exist without being meaningful)
+and point 13 (check for an even stronger signal before extending a chain like this)
+stayed separate on purpose — they're different axes (value validity, and re-checking a
+chain's own premise), not more of the same idea. If the list keeps growing, watch for
+that same shape again: several points that are really the same idea refined across
+rounds, not genuinely distinct principles.
 
 ## The real review-comment workflow
 
@@ -514,7 +559,7 @@ there's nothing to address.
 re-fetch every thread's comments before assuming "awaiting response" still holds.** PR
 #123: after replying to two threads with an explanation of my approach (the lodash alias,
 the CloverImage workaround), the reviewer had in fact already replied again to both,
-rejecting the approach outright (see points 18-19 above) — discovered only by re-listing
+rejecting the approach outright (see points 16-17 above) — discovered only by re-listing
 `gh api repos/<owner>/<repo>/pulls/<number>/comments` and noticing `in_reply_to_id`
 pointing at comments I thought were still open-ended. Don't rely on a mental model of
 "which threads are settled" built at the time you last replied — a long-running PR
@@ -537,8 +582,8 @@ text actually gets written, code comment or review reply alike.
 
 ## Guardrails
 
-1. **Points 1-13 and 18-22 are observed behavior from one specific reviewer
-   (`zmarinov-astea`), verified across four unrelated PRs/features; points 14-17 are a
+1. **Points 1-11 and 16-24 are observed behavior from one specific reviewer
+   (`zmarinov-astea`), verified across four unrelated PRs/features; points 12-15 are a
    second reviewer (`Sachanski`), so far only one round each on two PRs** — real and
    worth taking seriously, but don't present either as if every asteasolutions reviewer
    will behave identically, and don't overstate Sachanski's points as being as thoroughly
@@ -548,7 +593,7 @@ text actually gets written, code comment or review reply alike.
 2. **Don't add a speculative "why" comment expecting it to survive review here** — see
    point 4 above. This cuts against generic advice (including this skill set's own default
    elsewhere) to explain non-obvious constraints; this repo's bar is specifically narrower.
-   The one exception is a TODO a reviewer explicitly asks for (point 17) — that's a
+   The one exception is a TODO a reviewer explicitly asks for (point 15) — that's a
    reviewer-requested marker, not a self-initiated explanatory comment, so it doesn't
    loosen this guardrail for anything you add on your own.
 3. **When two pieces of code differ only in a value passed through the same shape**,

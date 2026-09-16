@@ -611,7 +611,7 @@ a caveat to it — summarized here for the record:
 
 One more real finding, not folded above because it doesn't change this skill's
 recommended *design*, only how to write the code once you're implementing it — see
-`tapestry-pr-conventions` point 20 for the generalizable version:
+`tapestry-pr-conventions` point 18 for the generalizable version:
 
 - **Nested ternaries branching on a platform/type field should become per-type
   functions or components once there's more than one level of branching, or once a
@@ -749,4 +749,4 @@ URL can differ from what the user recognizes.
     extensibility.** A literal `Record` map can't type-safely dispatch a discriminated
     union to differently-shaped per-variant data without an unsafe cast — that's the
     correct TypeScript idiom here even though "use maps" is how a reviewer may phrase
-    the ask. See `describeExternalCollection` and `tapestry-pr-conventions` point 20.
+    the ask. See `describeExternalCollection` and `tapestry-pr-conventions` point 18.
