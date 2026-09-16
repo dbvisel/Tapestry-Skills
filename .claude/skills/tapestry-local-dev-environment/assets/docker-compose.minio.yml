@@ -94,6 +94,13 @@ services:
       # runs in the worker and needs the client container's own Compose-network
       # address, not the browser-facing VIEWER_URL.
       VIEWER_URL: ${INTERNAL_VIEWER_URL:-${VIEWER_URL}}
+      # The client bundle Puppeteer loads makes its own API calls to the browser-facing
+      # EXTERNAL_SERVER_URL, baked in at the client's build time -- also unreachable
+      # from inside this container. server/src/tasks/utils.ts adds a Chromium
+      # host-resolver rule redirecting EXTERNAL_SERVER_URL's host to this one at the
+      # DNS level when set (a no-op otherwise, e.g. real AWS/production) -- see this
+      # skill's "Puppeteer thumbnail screenshots look logged-out" section.
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-}
       PUPPETEER_ARGS: "--no-sandbox,--disable-gpu,--disable-dev-shm-usage"
     depends_on:
       - db

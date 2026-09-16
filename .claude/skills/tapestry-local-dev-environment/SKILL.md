@@ -10,7 +10,9 @@ skill_discovery_hints:
   - keywords: ["MinIO installer", "setup.sh", "CSP", "Content-Security-Policy", "connect-src"]
   - keywords: ["connection refused", "ECONNREFUSED", "AWS_INTERNAL_ENDPOINT_URL", "INTERNAL_VIEWER_URL", "worker can't reach S3"]
   - keywords: ["extra_hosts host-gateway", "localhost from inside container", "musl localhost"]
-last_verified: 2026-08-31
+  - keywords: ["tapestry screenshot shows homepage not the tapestry", "worker thumbnail screenshot logged out", "crypto.randomUUID is not a function"]
+  - keywords: ["host-resolver-rules", "unsafely-treat-insecure-origin-as-secure", "VITE_API_URL unreachable from worker", "refreshToken cookie sameSite"]
+last_verified: 2026-09-14
 ---
 
 Run Tapestries locally. **`internetarchive/tapestry-project` (`main`) is the definitive
@@ -234,6 +236,78 @@ address is only reachable on your current network and breaks the moment it chang
 the per-service override above is the actual fix and doesn't depend on any
 machine-specific value.
 
+## Puppeteer thumbnail screenshots look logged-out, or crash with crypto.randomUUID (Docker+MinIO installer only)
+
+Verified directly (real Puppeteer runs against this fork's actual local stack, not just
+reasoning about it): even after the `AWS_INTERNAL_ENDPOINT_URL`/`INTERNAL_VIEWER_URL`
+fix above is correctly in place, the worker's tapestry-screenshot job (used for
+thumbnail generation — see `tapestry-server-worker`) can still render the site's
+generic public homepage instead of the actual tapestry, or crash the client app
+mid-screenshot with `crypto.randomUUID is not a function`. This is **two more,
+different** browser-facing-vs-internal problems layered on top of the one above, not a
+sign that fix is wrong. Check both before assuming the install is broken or inventing a
+new fix — this exact combination has already been found and fixed once (originally on
+`iiif-clover-viewer`, an `iiif-upstream`-derived branch on `dbvisel/tapestry-project`;
+verify these files still carry it before assuming a checkout has it).
+
+**Problem A — the client bundle's own JS is unreachable, not just the worker's.** The
+client is a static build; its `VITE_API_URL` (browser-facing, e.g.
+`http://localhost:3000/api`) is baked into the JS at Docker image build time. Unlike
+`AWS_ENDPOINT_URL`/`VIEWER_URL`, this can't be fixed with a worker-side environment
+override alone — the *browser's own script*, not the worker's Node process, is the one
+making these calls, and it only knows the address it was built with. Symptom: the
+screenshot shows the logged-out public dashboard ("No tapestries", a Login button)
+instead of the tapestry, and the browser console (forward it via `page.on('console',
+...)` while debugging) shows repeated `net::ERR_CONNECTION_REFUSED` for
+`http://localhost:3000/api/...` calls.
+
+**The fix, verified working**: a Chromium `--host-resolver-rules=MAP <host> <host>`
+launch flag (in `server/src/tasks/utils.ts`'s `inNewBrowserPage`), redirecting
+`EXTERNAL_SERVER_URL`'s host to a new `INTERNAL_API_URL` env var's host (mirrors
+`INTERNAL_VIEWER_URL`'s pattern: set only for the worker, e.g. `http://server:3000`,
+no-op when unset). This works at the DNS-resolution level *inside that one launched
+Chrome instance* — the browser still believes it's talking to the original host, so
+anything scoped to that host (cookies included) still matches.
+
+**A dead end worth knowing about, so it isn't re-tried**: Puppeteer request
+interception (`page.setRequestInterception(true)` + `request.continue({ url:
+rewrittenUrl })`) looks like the more obvious fix and *does* successfully redirect the
+request, but **silently drops the auth cookie** — verified with `request.headers()`
+showing the `Cookie` header present right up until the interception rewrite, then
+absent from what the real destination actually receives. Chrome re-validates a
+request's cookies against its origin once the URL changes, and the rewritten URL's
+origin no longer matches the cookie's. `--host-resolver-rules` never changes the URL or
+origin the browser perceives, so this problem doesn't arise.
+
+**Problem B — the manually-injected auth cookie must match the real login flow's
+scoping exactly, not the page's own host.** The screenshot job stands in for a real
+login by directly injecting a refresh-token cookie (`takeTapestryScreenshots`'s
+`context.setCookie(...)`, in `server/src/tasks/thumbnail-generators/tapestry.ts`). It's
+tempting to scope this to whatever host Puppeteer navigated to (e.g. `client`) — that's
+wrong, because the client bundle's *own* API calls are cross-origin, targeting
+`EXTERNAL_SERVER_URL`'s host, not the page's own host. Mirror
+`server/src/resources/sessions.ts`'s real `SECURE_COOKIE_OPTIONS` exactly: domain =
+`new URL(config.server.externalUrl).host`, `sameSite: 'None'`, `secure:
+config.server.secureCookie`, `path: '/api/sessions'`. Getting any one of these wrong
+(especially the domain) makes the cookie silently never get attached — no error, just a
+`POST /api/sessions` that 401s and the same logged-out-looking homepage as Problem A,
+which is easy to misdiagnose as Problem A recurring. Verify by checking the *server's*
+access log for `POST /api/sessions` around the time of the screenshot, not just the
+worker's own output.
+
+**Problem C — `crypto.randomUUID is not a function`, once A and B are both fixed.**
+Chrome only exposes some Web APIs (`crypto.randomUUID` is the one hit here; there may
+be others) on a "secure context": HTTPS, or the literal hostname `localhost`. A plain
+HTTP Compose-network address like `http://client:80` (`INTERNAL_VIEWER_URL`) is
+neither, so the client app crashes as soon as it needs one of those APIs — which, for a
+real tapestry page, is almost immediately.
+
+**The fix, verified working**: add a `--unsafely-treat-insecure-origin-as-secure=<the
+resolved VIEWER_URL's origin>` Puppeteer launch flag alongside the
+`--host-resolver-rules` one above. Safe here specifically because this Puppeteer
+instance only ever loads this app's own tapestry viewer page, never arbitrary
+third-party content.
+
 ## Guardrails
 
 1. **Treat `internetarchive/tapestry-project` `main` as ground truth.** Verify
@@ -265,6 +339,13 @@ machine-specific value.
 7. **`AWS_ENDPOINT_URL`/`VIEWER_URL` are browser-facing, not container-facing** —
    see "Internal vs. browser-facing addresses" above before assuming a worker-side
    connection-refused error means the install itself is broken.
+8. **A worker screenshot showing the logged-out homepage, or crashing with
+   `crypto.randomUUID is not a function`, is not automatically the same bug as #7** —
+   see "Puppeteer thumbnail screenshots look logged-out, or crash with
+   crypto.randomUUID" above. Check `server/src/tasks/utils.ts` (host-resolver-rules +
+   the secure-context flag) and `server/src/tasks/thumbnail-generators/tapestry.ts`
+   (the injected cookie's domain/sameSite/path) together before re-deriving this from
+   scratch.
 
 ## Bundled scripts and assets (fork-variation installer, not upstream)
 
