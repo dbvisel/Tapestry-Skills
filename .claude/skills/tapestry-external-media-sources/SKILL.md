@@ -1,6 +1,6 @@
 ---
 name: tapestry-external-media-sources
-description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Openverse and Wikimedia Commons are now real, verified, non-fork implementations (asteasolutions/tapestry-project#112, covering image/audio for Openverse and image/video/audio/pdf for Commons, through one full review round as of this writing) — including a real codec-compatibility gotcha (prefer Commons' WebM/MP3 transcodes over Ogg originals) and a corrected finding on when a server-side proxy is actually warranted for a rate-limited third-party API (real review rejected routing through one by default; both platforms are called directly from the client)
+description: Let users import a single media file from an external platform's "page about a file" URL (e.g. a Wikimedia Commons File: page, an Openverse image page) by resolving it to the direct file URL and creating a plain, ordinary media item — no new item type, no new webpage type, no schema changes at all. Openverse and Wikimedia Commons are now real, verified, non-fork implementations (asteasolutions/tapestry-project#112, covering image/audio for Openverse and image/video/audio/pdf for Commons, through two full review rounds as of this writing) — including a real codec-compatibility gotcha (prefer Commons' WebM/MP3 transcodes over Ogg originals), why Commons' `videoinfo` endpoint is queried for every file type despite its name, and a corrected finding on when a server-side proxy is actually warranted for a rate-limited third-party API (real review rejected routing through one by default; both platforms are called directly from the client)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -10,7 +10,8 @@ skill_discovery_hints:
   - keywords: ["item-factories.ts", "createMediaItem", "parseCommonsFileURL"]
   - keywords: ["Ogg Theora WebM transcode", "Ogg Vorbis Safari", "Commons derivatives", "browser codec compatibility"]
   - keywords: ["CORS present rate limited burst test", "429 concurrent requests", "reject server-side proxy", "autoReload false instead of proxy"]
-last_verified: 2026-09-14
+  - keywords: ["videoinfo not video specific", "prop=videoinfo for images", "MediaWiki general file metadata endpoint", "imageinfo vs videoinfo derivatives"]
+last_verified: 2026-09-16
 ---
 
 Checklist for letting users paste a URL from an external platform that describes a single
@@ -25,9 +26,9 @@ exploratory work on a personal fork, one now a real, non-fork implementation ver
 against the actual live external APIs and opened as a PR against actual upstream:
 
 - **Openverse image/audio import** — `core/src/openverse.ts` +
-  `externalMediaFactory` in `client/src/stage/item-factories.ts` — real, verified, part of
+  `openverseFactory` in `client/src/stage/item-factories.ts` — real, verified, part of
   [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
-  (through one full review round, 2026-09-14, as of this writing). Handles both
+  (through two full review rounds, 2026-09-14 and 2026-09-16, as of this writing). Handles both
   `/image/<uuid>` and `/audio/<uuid>`
   page URLs (`OpenverseMediaType = 'image' | 'audio'`) — e.g.
   `https://openverse.org/image/6c17d9b6-7721-4d42-95e6-1d570cadae74?p=1` (the `?p=1` is just
@@ -35,19 +36,30 @@ against the actual live external APIs and opened as a PR against actual upstream
   against the path alone). Openverse's own API always returns the single best/original file
   per item — there are no alternate-resolution derivatives to choose between, unlike
   Commons below.
-- **Wikimedia Commons file import** — `core/src/wikimedia-commons.ts`, same
-  `externalMediaFactory`, same PR. **Real, live-verified `mediatype`-to-item-type mapping**
+- **Wikimedia Commons file import** — `core/src/wikimedia-commons.ts`,
+  `wikimediaFactory` (split from a shared `externalMediaFactory` in round 2 — see
+  `tapestry-pr-conventions` point 25), same PR. **Real, live-verified
+  `mediatype`-to-item-type mapping**
   (via `action=query&prop=videoinfo&viprop=mediatype|mime`, confirmed against real Commons
   files of each kind): `BITMAP`/`DRAWING` → `image`, `VIDEO` → `video`, `AUDIO` → `audio`,
   `OFFICE` with `mime: application/pdf` → `pdf` (any other `OFFICE` file — DjVu, Word, plain
   category pages — is unsupported and returns `null`, same as the Commons 3D-model mapping
-  below). A 3D-model mapping like
+  below). **`prop=videoinfo` is queried for every file type here, image included, despite
+  its name** — a reviewer asked, of a plain image import, "why are we looking for video
+  collection items?" `videoinfo` is MediaWiki's general per-file metadata endpoint for
+  Commons, not video-specific; confirmed with a real API call that returns a plain JPEG
+  under `videoinfo` with `mediatype: BITMAP` and full data. The narrower-sounding
+  `imageinfo` lacks the `derivatives` field this code needs (see point 3 below, for
+  video/audio playback URLs), so `videoinfo` is the correct choice for every file type
+  Commons serves, not a video-only special case that happens to also work for images. Don't
+  assume an endpoint's name reflects its actual scope on this API — check what fields you
+  actually need before picking one that only sounds narrower. A 3D-model mapping like
   `https://commons.wikimedia.org/wiki/File:3D_Model_Belly_Amphora.stl` → `model3d` is not
   part of #112 (only image/video/audio/pdf were asked for) but would follow the exact same
   pattern if added later — see step 2's mapping table.
 
 `#112` is real, working code, verified end-to-end against the actual live Openverse and
-Commons APIs (not just read from their docs), and through one real review round — but it
+Commons APIs (not just read from their docs), and through two real review rounds — but it
 is **not yet merged**. Don't tell a user Openverse/Commons single-file import is upstream
 and shipping.
 

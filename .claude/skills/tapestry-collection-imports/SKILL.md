@@ -1,6 +1,6 @@
 ---
 name: tapestry-collection-imports
-description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, now generalized from three real (non-fork) implementations against actual upstream, each via an open PR — IA search (#96), and Openverse plus Wikimedia Commons together in one PR (#112, through one full review round as of this writing) that deliberately shares plumbing across both platforms — plus real, live-verified gotchas (a shared-component "clears the list on any failure" bug, cursor-based vs. numeric pagination, per-item media type dispatch for mixed-type collections) and real reviewer-driven corrections (reject a server-side proxy for a rate-limited API once CORS is confirmed and the real fix is disabling a list's background reload; give each platform a direct union member instead of nesting by a platform field; extract a shared list/UI component once a second list duplicates it; replace scattered per-platform ternaries with one per-type config function)
+description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, now generalized from three real (non-fork) implementations against actual upstream, each via an open PR — IA search (#96), and Openverse plus Wikimedia Commons together in one PR (#112, through two full review rounds as of this writing) that deliberately shares plumbing across both platforms — plus real, live-verified gotchas (a shared-component "clears the list on any failure" bug, cursor-based vs. numeric pagination, per-item media type dispatch for mixed-type collections) and real reviewer-driven corrections (reject a server-side proxy for a rate-limited API once CORS is confirmed and the real fix is disabling a list's background reload; give each platform a direct union member instead of nesting by a platform field; extract a shared list/UI component once a second list duplicates it, then split the per-platform container back apart once real type differences accumulate — a merge is not permanent; replace scattered per-platform ternaries with one per-type config function; verify a reviewer's speculative richer-data claim against the real API before building for it)
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-external-media-sources"]
@@ -16,7 +16,9 @@ skill_discovery_hints:
   - keywords: ["remove server-side proxy", "CORS instead of proxy", "autoReload false", "rate limit background reload"]
   - keywords: ["rename type outgrows scope", "IAImport to CollectionImport", "handle-ia-import-dialog rename"]
   - keywords: ["maps instead of ternaries", "per-type config object", "describeExternalCollection"]
-last_verified: 2026-09-14
+  - keywords: ["un-merge after review", "split list back into per-platform components", "split factory into per-platform factories", "openverseFactory wikimediaFactory", "OpenverseCollectionList WikimediaCollectionList"]
+  - keywords: ["CollectionListProps Pick LazyListProps", "rest parameter props forwarding", "commons category thumbnail", "pageimages piprop", "extracts empty for category"]
+last_verified: 2026-09-16
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -51,11 +53,13 @@ real PRs:
   `WikimediaCommonsCategory` (plus their single-file counterparts, image/audio/video/PDF),
   opened as
   [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
-  (2026-09-03). Through one real review round (2026-09-14) as of this writing, all 8
-  threads addressed and resolved, still open/unmerged. This PR deliberately generalizes
-  across *two* platforms at once — see "Generalizing across multiple platforms in one PR"
-  below for the design that resulted (and what review corrected in it), and "Real PR
-  review feedback" for exactly what that round asked for.
+  (2026-09-03). Through two real review rounds (2026-09-14, 8 threads; 2026-09-16, 9
+  threads) as of this writing, all addressed and resolved, still open/unmerged. This PR
+  deliberately generalizes across *two* platforms at once — see "Generalizing across
+  multiple platforms in one PR" below for the design that resulted (and what review
+  corrected in it, across both rounds — round 2 partially *reversed* round 1's own
+  merge, see "Round 2: un-merging what round 1 merged" below), and "Real PR review
+  feedback" for exactly what each round asked for.
 
 **So as of this writing, `IACollection`, `IAPlaylist` (long-standing upstream), and
 `IASearchCollection`/`OpenverseCollection`/`WikimediaCommonsCategory` (open, unmerged PRs)
@@ -159,7 +163,20 @@ the picker UI.
 6. **`client/src/components/collection-import-dialog/import-items-list/<x>-list/index.tsx`**
    (new component) — implements the shared list contract, now **on top of the real,
    shared `CollectionList` component**
-   (`import-items-list/collection-list/index.tsx`), not a hand-rolled `<LazyList>` wrapper:
+   (`import-items-list/collection-list/index.tsx`), not a hand-rolled `<LazyList>` wrapper.
+   **This is a per-platform container** (`OpenverseCollectionList`,
+   `WikimediaCollectionList` — see "Round 2: un-merging what round 1 merged" below for why
+   these are two components, not one shared `ExternalCollectionList`), built on the one
+   genuinely shared primitive:
+   - `CollectionListProps<T>` derives its shared fields from `LazyListProps<T>` with
+     `Pick` (`extends Pick<LazyListProps<T>, 'requestItems' | 'windowSize' |
+     'loadingEdgeProximity' | 'autoReload' | 'onLoaderInitialized' | 'header'>`) plus its
+     own render-prop fields, instead of hand-redeclaring those six fields. A caller
+     destructures only the fields it actually uses itself and forwards the rest straight
+     through with a rest parameter (`<CollectionList {...lazyListProps} renderItemContent=
+     {...} ... />`) rather than re-listing every pass-through prop by name. Reuse this
+     `Pick`-plus-rest shape any time a new component wraps an existing props interface and
+     only needs to add or intercept a few of its fields.
    - A `request<X>Items(id, skip, limit, signal) => Promise<ListResponseDto<T>>` function
      (exported, also reused directly by step 4's "select all" branch) — wraps step 1's
      member-listing fetch, slicing/paginating it to fit `<LazyList>`'s windowed-fetch
@@ -203,7 +220,21 @@ the picker UI.
      `CollectionList`'s render-prop seams already cover.
 7. **`client/src/components/collection-import-dialog/import-details/index.tsx`** — add a
    branch showing the collection's name/id, its `total` count, and a "View on \<platform\>"
-   link back to the original collection page. Also a plain `if` chain.
+   link back to the original collection page. Also a plain `if` chain. **Don't assume a
+   shared details layout fits every platform** — a reviewer asked for this on #112 round
+   2 (*"Openverse and wikimedia should not have a common collection details layout, since
+   we can extract more details from the commons category like description and
+   image"*), and checking the speculative claim against the real Commons API before
+   building anything found a real, verified nuance: `prop=extracts` (Wikipedia's
+   article-summary endpoint) always returns an **empty** string for a Commons category
+   (confirmed against three real categories — categories are templated, not prose, so
+   there's no actual description to extract), but `prop=pageimages`/`piprop=thumbnail`
+   **does** resolve a real representative thumbnail for the category
+   (`fetchWikimediaCollectionThumbnail`, `core/src/wikimedia-commons.ts`). Built exactly
+   what the API actually supports (a thumbnail, no description) rather than either the
+   reviewer's speculative "description and image" or dismissing the ask outright —
+   verify a reviewer's speculative richer-data claim against the live API before deciding
+   how much to build.
 8. **`MAX_SELECTION`** (`collection-import-dialog/index.tsx`) is a single shared constant —
    **the real upstream default is 50**, applied uniformly to every collection type
    (including `IACollection`/`IAPlaylist`). Don't introduce a per-type selection cap; if a
@@ -221,7 +252,7 @@ actually shipped:
 
 **Shares across platforms** (the same shape held for both, verified, not assumed):
 
-- **One shared picker list/details component, not one per platform** — but as an
+- **One shared picker list/details *shell*, not one per platform** — but as an
   actually-extracted, reusable component, not just one big component internally
   parameterized by `platform`. The first draft did the latter (one
   `ExternalCollectionList` with `platform === 'openverse'` branches scattered through
@@ -230,7 +261,9 @@ actually shipped:
   component (`CollectionList`,
   `client/src/components/collection-import-dialog/import-items-list/collection-list/`),
   reusable by `IASearchList` too, not just the two external platforms. See step 6 above
-  for the current shape.
+  for the current shape. **This held up only at the shell layer — the container built on
+  top of it (`ExternalCollectionList` itself) did not stay merged past round 2; see
+  "Round 2: un-merging what round 1 merged" below.**
 - **Only add a real generic abstraction (a `Platform` type, a registry array) once a
   second real platform exists to prove the shape against** — there was no such
   abstraction anywhere in the codebase before #112, deliberately: inventing one for
@@ -289,11 +322,14 @@ first draft's guesses:**
 - **`core/src/<platform>.ts` stays one module per platform.** No shared base
   interface/adapter was introduced at this layer — each module's `parse*`/`fetch*`
   functions are independent, matching the pre-existing per-source convention (IA has
-  its own module too). The `externalMediaFactory` in `item-factories.ts` tries each
-  platform's parsers in sequence inside one function, rather than a registry loop over a
-  generic adapter array — for exactly two platforms, a formal adapter interface bought
-  nothing a plain sequence of `if` branches didn't already give, at real TypeScript
-  ceremony cost. Revisit this specific call if a third platform arrives.
+  its own module too). As of round 1, a single `externalMediaFactory` in
+  `item-factories.ts` tried each platform's parsers in sequence inside one function,
+  rather than a registry loop over a generic adapter array — for exactly two platforms,
+  a formal adapter interface bought nothing a plain sequence of `if` branches didn't
+  already give, at real TypeScript ceremony cost. **That single factory did not survive
+  round 2** — it was split into `openverseFactory`/`wikimediaFactory` for a different
+  reason (type-narrowing, not adapter ceremony); see "Round 2: un-merging what round 1
+  merged" below.
 - **Pagination mechanics are not the same shape, and forcing them to look the same
   would have been fake generalization.** Openverse's real pages are independently
   addressable by number (`fetchOpenverseCollectionPage(mediaType, collection, page,
@@ -332,6 +368,35 @@ first draft's guesses:**
   rather than trying to fit it into a single collection-level type** — it's the only way
   the shared per-item rendering/selection/creation logic stays correct for a mixed list.
 
+## Round 2: un-merging what round 1 merged
+
+Round 1 (above) merged both platforms' list and factory into one `ExternalCollectionList`/
+`externalMediaFactory`, narrowing on a `platform`/shape field at runtime where needed
+(`'mediaType' in item ? ... : ...`, `'uploader' in item`). Round 2 (2026-09-16) asked for
+exactly that merge to be undone, for both pieces: *"What I meant was to split this
+external collection list into wikimedia list and openverse list components"* and, on the
+factory, *"This looks like it ca be split into openverse factory and wikimedia factory."*
+Shipped as `OpenverseCollectionList`/`WikimediaCollectionList` (see step 6 above) and
+`openverseFactory`/`wikimediaFactory`, each now typed against its own concrete item shape
+(`OpenverseMedia`/`WikimediaMedia`) with no runtime narrowing at all.
+
+**This is not a contradiction of `tapestry-pr-conventions` point 1 ("merge
+near-duplicates") — it's the same principle applied a round later, once the merged
+pieces had genuinely stopped being near-duplicates.** Point 1 merges things that differ
+"only in a value passed through the same shape." By round 2, Openverse and Commons list
+items no longer differed only in a value — they were different concrete types requiring
+real `in`-narrowing at every render/select/creation call site, which is exactly the shape
+point 1 exists to avoid duplicating *and* the shape a shared component should never have
+forced onto itself in the first place. Splitting removed the narrowing; it did not
+reintroduce ~90%-identical code, since what's left in each per-platform file is genuinely
+platform-specific (item rendering, detail columns, parsing). **What stayed merged**: the
+lower-level `CollectionList` shell (see above) — round 2 only split the layer that had
+accumulated real per-platform type differences, not the layer that was still genuinely
+platform-agnostic. See `tapestry-pr-conventions` point 25 for the generalized version of
+this lesson: a past merge is worth re-checking against point 1's own "differs only in a
+value" condition once a second round adds real structural differences, not treating
+"already merged" as a one-way door.
+
 ### Adding a third platform (e.g. Flickr, Sketchfab, Internet Archive media)
 
 The shape above was built and verified against exactly two platforms, and corrected once
@@ -360,17 +425,17 @@ extend is smaller than the pre-review shape implied:
    `core/` function straight from wherever it's needed — most of this file's original
    pass-through wrapper functions were removed for exactly this reason once the proxy
    went away.
-4. `client/src/stage/item-factories.ts`'s `externalMediaFactory` — one more sequential
-   parse-attempt block (try the new platform's single-item parser, then its collection
-   parser) inside the existing function. Still not a registry/adapter array for three
-   platforms — reconsider that specific call only if a fourth arrives and the sequential
-   `if` chain has become genuinely hard to follow.
-5. Wire the new platform into the shared `CollectionList` (see step 6 of the main
-   checklist) with its own `renderItemContent`/`renderItemDetails`/`emptyPlaceholder`,
-   the same way `OpenverseCollection`/`WikimediaCommonsCategory` do in
-   `ExternalCollectionList`'s `describeExternalCollection` function — one more branch in
-   that one function, not a scattered `platform === '<platform>'` check in each of
-   several places. Same idea in `import-details/index.tsx`: one more per-type component,
+4. `client/src/stage/item-factories.ts` — add a new `<platform>Factory`, matching the
+   post-round-2 shape (`openverseFactory`/`wikimediaFactory`), not a shared multi-platform
+   factory with sequential parse-attempt blocks — round 2 already rejected that shape for
+   exactly two platforms once real per-platform type differences accumulated (see "Round
+   2: un-merging what round 1 merged" below), so a third platform shouldn't reintroduce
+   it either.
+5. Add a new `<Platform>CollectionList` component (see step 6 of the main checklist),
+   the same way `OpenverseCollectionList`/`WikimediaCollectionList` each wire the shared
+   `CollectionList` shell with their own `renderItemContent`/`renderItemDetails`/
+   `emptyPlaceholder` — not a scattered `platform === '<platform>'` check bolted onto an
+   existing list. Same idea in `import-details/index.tsx`: one more per-type component,
    not one more ternary branch.
 6. `LazyList`'s `autoReload` should stay `false` for this list too, for the same reason
    it is for the existing two platforms — a rate-limited third-party API gains nothing
@@ -631,6 +696,30 @@ recommended *design*, only how to write the code once you're implementing it —
   more collection types?" — treat "map" as shorthand for "one dispatch point per
   concern," not literally "must be a `Record` object."
 
+## Real PR review feedback (2026-09-16)
+
+Second review round on
+[asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112),
+all 9 threads from `zmarinov-astea`, addressed and resolved in one push. Two findings are
+folded in full above (see "Round 2: un-merging what round 1 merged," and the details-layout
+note in step 7) — summarized here for the record, plus two smaller ones not detailed
+elsewhere:
+
+- **Split the shared list/factory back into per-platform pieces**, reversing round 1's
+  own merge once real per-item type differences had accumulated. See "Round 2" above.
+- **Give Openverse and Wikimedia separate details layouts**, after verifying against the
+  real Commons API what data was actually available. See step 7 above.
+- **Rename folders once their scope stops matching their contents**: `search-list/` and
+  `playlist/` (IA-specific components, named when IA was the only platform) became
+  `ia-search-list/`/`ia-playlist/` once non-IA list components existed alongside them —
+  the same "a name outgrows its scope" instinct `tapestry-pr-conventions` point 20
+  documents for a type, applied here to a directory name.
+- **A naming-clarity ask can target a variable, not a prop** — the dialog's own internal
+  `header` variable was renamed to `importDetails` to stop reading as if it were the same
+  thing as `ImportItemsList`'s own `header` prop (it isn't); the prop itself was left
+  alone. Don't over-apply a rename request to everything sharing the old name — check
+  what the reviewer is actually pointing at.
+
 ## Design consideration: import-by-reference vs. a real copy
 
 **Every reference implementation here — both this skill's collection types and
@@ -742,7 +831,11 @@ URL can differ from what the user recognizes.
     exists that duplicates it**, not just parameterize the first list further — the
     same "merge near-duplicate siblings" principle as guardrail 4, applied to a
     component's structure and behavior rather than to a query string. See
-    `CollectionList` and "Real PR review feedback (2026-09-14)" above.
+    `CollectionList` and "Real PR review feedback (2026-09-14)" above. **This applies to
+    the genuinely platform-agnostic shell only** — once a merged *container* built on
+    top of that shell starts needing real per-variant type-narrowing (`'x' in item`), the
+    container should split back apart even though the shell underneath stays merged; see
+    guardrail 19 below.
 18. **A ternary chain branching on a platform/type field should become a small
     `if`/`return` function returning one config object per branch, once there's more
     than one such branch scattered through a component or a reviewer asks about
@@ -750,3 +843,14 @@ URL can differ from what the user recognizes.
     union to differently-shaped per-variant data without an unsafe cast — that's the
     correct TypeScript idiom here even though "use maps" is how a reviewer may phrase
     the ask. See `describeExternalCollection` and `tapestry-pr-conventions` point 18.
+19. **A merge is not a one-way door — re-check it once real structural differences
+    accumulate.** If a merged list/factory has picked up runtime type-narrowing
+    (`'x' in item`) or scattered per-variant branching since it was merged, that's the
+    signal to split the *container* back into per-variant pieces, keeping only the
+    genuinely platform-agnostic shell merged. See "Round 2: un-merging what round 1
+    merged" above and `tapestry-pr-conventions` point 25.
+20. **Verify a reviewer's speculative "we could extract more data" claim against the
+    real API before building for it.** A plausible-sounding richer-data suggestion (e.g.
+    "extract description and image from the category") can turn out half-right when
+    checked live — build exactly what the API actually supports, not the full
+    speculative ask or nothing. See step 7 above.

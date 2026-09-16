@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name, put type-specific branching in the factory/dispatcher that owns recognizing that input shape, nest CSS selectors instead of repeating a parent one, audit the whole branch diff against main for scope creep before every round, and pick the schema-derivation base needing the fewest exclusions — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name, put type-specific branching in the factory/dispatcher that owns recognizing that input shape, nest CSS selectors instead of repeating a parent one, audit the whole branch diff against main for scope creep before every round, pick the schema-derivation base needing the fewest exclusions, and re-check a past merge for real structural drift that means it should un-merge — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -22,6 +22,7 @@ skill_discovery_hints:
   - keywords: ["CSS nesting", "repeated parent selector", "nest selectors under .root"]
   - keywords: ["unrelated change outside task scope", "whole branch diff against main", "leftover change from earlier round", "stray formatting change"]
   - keywords: ["schema derivation base", "fewest field exclusions", "closest semantic match", "export version schema"]
+  - keywords: ["un-merge after review", "split shared component back apart", "merge is not permanent", "runtime type narrowing signals un-merge"]
 last_verified: 2026-09-16
 ---
 
@@ -35,8 +36,9 @@ import — see `tapestry-content-types`' variation section),
 [#123](https://github.com/asteasolutions/tapestry-project/pull/123) (Clover IIIF viewer
 rework — see `tapestry-content-types`' IIIF reference), and
 [#112](https://github.com/asteasolutions/tapestry-project/pull/112) (Openverse/Wikimedia
-Commons collection import — see `tapestry-collection-imports`, points 18-20). **Points
-1-11 and 16-24 are all `zmarinov-astea`**, verified across all four PRs — feedback that
+Commons collection import, two review rounds — see `tapestry-collection-imports`, points
+18-20 and 25). **Points
+1-11 and 16-25 are all `zmarinov-astea`**, verified across all four PRs — feedback that
 recurs in the same shape across unrelated features is a stable preference of that
 gatekeeper, not a one-PR quirk. **Points 12-15 are a second reviewer, `Sachanski`**, on a
 later round of PR #109 and a round of PR #96 — their feedback so far is consistent in
@@ -396,6 +398,26 @@ consulted after a reviewer has already commented.
     had those action fields to begin with, so the derivation only needs to omit `type` —
     a smaller, more accurate diff, and a schema that no longer silently carries "these
     fields exist on the base but get stripped back off" as an implicit contract.
+25. **Point 1's "merge near-duplicates" is a good default, not a permanent state — once
+    a second round's real per-variant differences accumulate, expect the same reviewer to
+    ask for the opposite: split the merged component/factory back apart.** PR #112, round
+    2, reversing round 1's own merge (point 20 above merged `OpenverseCollection`/
+    `WikimediaCommonsCategory` handling into one `ExternalCollectionList` and one
+    `externalMediaFactory`): *"What I meant was to split this external collection list
+    into wikimedia list and openverse list components"* and, on the sibling factory,
+    *"This looks like it ca be split into openverse factory and wikimedia factory."* The
+    two components/factories had drifted from "the same shape, one differing value" (point
+    1's condition for merging) to genuinely different per-platform item shapes needing
+    real runtime type-narrowing (`'mediaType' in item`, `'uploader' in item`) just to stay
+    merged — splitting them back into `OpenverseCollectionList`/`WikimediaCollectionList`
+    and `openverseFactory`/`wikimediaFactory` removed that narrowing entirely, each now
+    typed against its own concrete item shape. **What stayed merged**: the lower-level,
+    genuinely platform-agnostic shell (`CollectionList`, the `LazyList`/checkbox/
+    mobile-details plumbing) — only the platform-specific container/factory split apart,
+    not everything point 1/17 had extracted. The generalizable shape: re-check a past
+    merge against point 1's own condition ("differing only in a value") whenever a second
+    round adds real structural differences, not just a new value — a merge that was
+    correct when it happened is not a one-way door.
 
 ## Pre-submission checklist: catch these before the reviewer does
 
@@ -491,6 +513,11 @@ checkable without waiting for a live comment:
 24. **Closest-match schema derivation** — when deriving a new type from an existing one,
     does the base require excluding fields the target never had? Check whether a
     different existing type needs fewer exclusions to reach the same shape (point 24).
+25. **Re-check an old merge, don't just avoid new duplication.** Has a previously-merged
+    component/factory (point 1) picked up real runtime type-narrowing (`'x' in item`
+    checks) or structural per-variant branching since it was merged, rather than just a
+    differing value? That's the signal to split it back apart into per-variant pieces,
+    keeping only the genuinely shared shell merged (point 25).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
@@ -524,7 +551,7 @@ exactly the job it was built for: catching a point-1-shaped issue pre-review ins
 paying for it as a round-trip, on a PR where — unlike #109 — the checklist was run
 proactively from the start rather than reconstructed after the fact.
 
-**A growing list is itself worth watching**: this checklist is now 24 items, entirely
+**A growing list is itself worth watching**: this checklist is now 25 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
 correct for keeping it evidence-based, but a 24-item self-review pass risks becoming too
 long to actually run carefully every time — the opposite of the speed this was meant to
@@ -582,7 +609,7 @@ text actually gets written, code comment or review reply alike.
 
 ## Guardrails
 
-1. **Points 1-11 and 16-24 are observed behavior from one specific reviewer
+1. **Points 1-11 and 16-25 are observed behavior from one specific reviewer
    (`zmarinov-astea`), verified across four unrelated PRs/features; points 12-15 are a
    second reviewer (`Sachanski`), so far only one round each on two PRs** — real and
    worth taking seriously, but don't present either as if every asteasolutions reviewer
