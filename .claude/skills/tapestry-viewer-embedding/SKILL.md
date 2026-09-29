@@ -1,6 +1,6 @@
 ---
 name: tapestry-viewer-embedding
-description: Package internetarchive/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code; the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work
+description: Package internetarchive/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code, now also published prebuilt as the @asteasolutions/tapestry-viewer npm package (the preferred way to obtain it); the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work, and verified for real in a working WordPress plugin (dbvisel/tapestry-viewer-wp-plugin)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,7 +8,8 @@ skill_discovery_hints:
   - keywords: ["embed tapestry viewer", "package viewer", "vite build --base", "standalone viewer"]
   - keywords: ["WordPress block", "Gutenberg block", "macOS app", "file:// CORS module"]
   - keywords: ["source query param", "same-origin fetch", "tapestry zip"]
-last_verified: 2026-08-18
+  - keywords: ["@asteasolutions/tapestry-viewer", "npm install viewer", "prebuilt viewer package"]
+last_verified: 2026-09-29
 ---
 
 Recipe for taking `/viewer` — the standalone, read-only Tapestry viewer that already ships
@@ -28,8 +29,21 @@ work — not present on any long-lived branch:
 
 **Neither integration exists on any current branch of `internetarchive/tapestry-project` or
 any default fork branch** — they're reference examples for this skill's packaging pattern,
-not features to claim already exist. Don't tell a user there's a real WordPress plugin or
-macOS app available; use this as the template for building a *new* host integration.
+not features to claim already exist. Don't tell a user there's an officially-shipped
+WordPress plugin or macOS app available; use this as the template for building a *new* host
+integration.
+
+**Update, 2026-09-29 — a real, working WordPress plugin now exists** (not part of
+`tapestry-project` itself, and not the same code as the informal reference integration
+above — a fresh build): [`dbvisel/tapestry-viewer-wp-plugin`](https://github.com/dbvisel/tapestry-viewer-wp-plugin).
+It follows this skill's exact recipe below, but gets the prebuilt viewer from the published
+`@asteasolutions/tapestry-viewer` npm package (see "Get a prebuilt viewer" in step 1) rather
+than building `viewer/` from a monorepo checkout — verified end-to-end in a real WordPress
+install (block registers, Media Library `.zip` upload works once the `upload_mimes`/
+`wp_check_filetype_and_ext` filters are in place, the embedded tapestry renders). Use it as
+a real, concrete example of this recipe, not just the generalized pattern described below.
+The macOS drag-and-drop opener is still only that generalized pattern from unmerged
+exploratory work — no real equivalent exists for it yet.
 
 ## Why the viewer is embeddable at all
 
@@ -62,15 +76,25 @@ often the fastest way to visually sanity-check a hand-built zip.
 
 ## The core recipe (both reference integrations do exactly this)
 
-1. **Build with a relative asset base**: `cd viewer && npx vite build --base=./` — not
-   plain `npm run build`. Vite's default build assumes the bundle is served from a domain
-   root, so `index.html` references assets as `/assets/...`; `--base=./` makes it
-   `./assets/...` instead, which is required the moment the bundle is served from any
-   subdirectory (a plugin folder, an app bundle's `Resources/`) rather than a site's root.
-   **Both reference integrations independently deliberately skip the `tsc -b` type-check**
-   that `viewer`'s own `npm run build` script runs first, calling `vite build` directly
-   instead — packaging a known-good viewer shouldn't fail because of an unrelated,
-   in-progress type error elsewhere in the monorepo.
+1. **Get a prebuilt viewer.** Two ways — default to the first unless you specifically need a
+   viewer build with local/unreleased changes:
+   - **Preferred: `npm install @asteasolutions/tapestry-viewer`.** Real, published package
+     (verified against the actual tarball, not just its listing) — its `dist/` already ships
+     built with a relative asset base (`./assets/...`, not `/assets/...`) and has zero
+     runtime dependencies, so there's no monorepo checkout, no `vite build` step, and no
+     `tsc -b` type-check to skip. The package's own bundled README has framework-specific
+     copy recipes (plain static-file copy, Vite's `vite-plugin-static-copy`, Express). This
+     is what [`tapestry-viewer-wp-plugin`](https://github.com/dbvisel/tapestry-viewer-wp-plugin)
+     (see above) uses.
+   - **Build from source**, only if you need it: `cd viewer && npx vite build --base=./` —
+     not plain `npm run build`. Vite's default build assumes the bundle is served from a
+     domain root, so `index.html` references assets as `/assets/...`; `--base=./` makes it
+     `./assets/...` instead, which is required the moment the bundle is served from any
+     subdirectory (a plugin folder, an app bundle's `Resources/`) rather than a site's root.
+     **Both reference integrations independently deliberately skip the `tsc -b` type-check**
+     that `viewer`'s own `npm run build` script runs first, calling `vite build` directly
+     instead — packaging a known-good viewer shouldn't fail because of an unrelated,
+     in-progress type error elsewhere in the monorepo.
 2. **Copy `viewer/dist/` wholesale** into wherever your host platform wants static assets —
    a plugin subfolder, an app bundle's resources directory. It's a normal static site
    (HTML/JS/CSS/assets); nothing about it is platform-specific yet.
@@ -129,7 +153,12 @@ the host environment is itself a React app that can afford to depend on
   `upload_mimes` filter to allow them; a macOS app needs a `CFBundleDocumentTypes` entry
   declaring `public.zip-archive` in its `Info.plist` before Finder will let a user drop a
   `.zip` onto it. Whatever your host platform is, check for its equivalent gate rather than
-  assuming `.zip` "just works."
+  assuming `.zip` "just works." **Verified real, WordPress specifically**:
+  `tapestry-viewer-wp-plugin` adds both an `upload_mimes` filter (the main gate) *and* a
+  `wp_check_filetype_and_ext` filter as a belt-and-suspenders fallback (some hosts
+  re-validate the uploaded file's real type independently of `upload_mimes` and can still
+  reject a genuine `.zip` with "not permitted for security reasons"); confirmed working
+  end-to-end in a real WordPress install with both filters in place.
 - **A native drag-and-drop wrapper may need a real compiled shim, not just a script.** On
   macOS specifically, a bare shell-script bundle executable launches fine but can never
   receive the `application(_:open:)` Apple Event Finder sends for a file dropped on the app

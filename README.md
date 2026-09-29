@@ -423,3 +423,19 @@ during review, in case future editors hit the same trap:
   indicator" — that guarantee only covers the drop/paste pipeline, a real gap in an
   already-shipped skill, not something specific to this PR, now corrected in both
   places.
+- `tapestry-viewer-embedding`'s WordPress reference moved from "found in unmerged
+  exploratory work, not a real thing you can point to" to a real, working, public repo:
+  [`dbvisel/tapestry-viewer-wp-plugin`](https://github.com/dbvisel/tapestry-viewer-wp-plugin).
+  It also changed *how* to get the prebuilt viewer in the first place — upstream now
+  publishes it prebuilt as the `@asteasolutions/tapestry-viewer` npm package (confirmed
+  against the actual tarball, not just its npm listing: already built with `--base=./`,
+  zero runtime deps), so a new host integration no longer needs a `tapestry-project`
+  checkout or a `vite build` step at all, just `npm install`. Verified real, not assumed:
+  the package's `dist/` works as a drop-in `--dist` input to `tapestry-standalone-viewer`'s
+  existing packaging script unmodified (checked in a real headless browser — URL landed at
+  `/?source=tapestry.zip`, a canvas rendered, zero console errors), and the WordPress plugin
+  itself was confirmed end-to-end in a real WordPress install (block registers, `.zip`
+  Media Library upload works once the `upload_mimes`/`wp_check_filetype_and_ext` filters are
+  in place, the embedded tapestry renders). Both skills were updated to recommend the npm
+  package as the default path, reserving a monorepo source build for when local/unreleased
+  viewer changes are actually needed.

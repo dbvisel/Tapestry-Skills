@@ -8,7 +8,8 @@ skill_discovery_hints:
   - keywords: ["standalone tapestry viewer", "bundle viewer with zip", "self-contained tapestry app"]
   - keywords: ["package-standalone-viewer.sh", "offline tapestry viewer", "tapestry static site"]
   - keywords: ["fixed source zip", "embed one tapestry", "distribute a tapestry as a webpage"]
-last_verified: 2026-08-18
+  - keywords: ["@asteasolutions/tapestry-viewer", "npm package dist", "no monorepo checkout"]
+last_verified: 2026-09-29
 ---
 
 Build a single static directory that bundles the standalone `/viewer` app **with one
@@ -36,7 +37,10 @@ modes below were verified that way: driving headless Chrome against a served bui
 confirms no console errors, the real tapestry content rendering, and the URL staying at
 the site root throughout (with the query string appended in the default mode, or
 completely bare with `--no-query-string` — which also skips re-fetching the zip on
-reload, reading from IndexedDB instead).
+reload, reading from IndexedDB instead). Verified again, separately, against the
+`@asteasolutions/tapestry-viewer` npm package's `dist/` as the `--dist` input (see below) —
+same result: URL at `/?source=tapestry.zip`, a canvas rendered, zero console errors or
+failed requests.
 
 ## When to use this skill
 
@@ -68,6 +72,17 @@ skip the rebuild. Add `--serve [port]` to immediately serve the result locally w
 `python3 -m http.server` (matches `tapestry-viewer-embedding`'s macOS reference
 integration's own approach to getting a real http(s) origin) so you can check it right
 away.
+
+**Simpler still: no monorepo checkout at all.** `npm install @asteasolutions/tapestry-viewer`
+and pass `--dist node_modules/@asteasolutions/tapestry-viewer/dist` — **verified real, drop-in
+compatible**: the published package ships already built with `--base=./` (same relative-path
+shape this script otherwise builds from source), so the script's `--dist` mode works against
+it unmodified. Confirmed end-to-end in a real headless browser (see "Verified end-to-end"
+below) — URL landed at `/?source=tapestry.zip`, a canvas rendered, zero console errors. This
+is the same package `tapestry-viewer-embedding`'s WordPress plugin reference
+(`dbvisel/tapestry-viewer-wp-plugin`) uses, and is now the preferred way to get a `--dist`
+input for this script — reach for `--project-dir` only if you need a viewer build with
+local/unreleased changes.
 
 If the input zip needs to be built or validated first, see `tapestry-zip-authoring` /
 `tapestry-zip-analysis` — this skill only handles the packaging step, not producing or
