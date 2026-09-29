@@ -1,25 +1,34 @@
 ---
 name: tapestry-auth-providers
-description: Add a new external login provider to internetarchive/tapestry-project (ia/google today) — the full client+server+schema+deployment checklist, generalized from two real reference implementations (ORCID, MediaWiki OAuth) on unmerged fork branches
+description: Add a new external login provider to internetarchive/tapestry-project (ia/google today) — the full client+server+schema+deployment checklist, generalized from a real open PR (ORCID, asteasolutions/tapestry-project#76) and one reference implementation (MediaWiki OAuth) on an unmerged fork branch
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["add auth provider", "new login provider", "OAuth provider tapestry", "AuthProvider", "AuthService"]
   - keywords: ["ORCID login", "MediaWiki login", "Wikimedia OAuth", "authorization code flow"]
-  - keywords: ["VITE_AUTH_PROVIDER", "updateUserIfExists", "session dto", "SessionCreateDto"]
-last_verified: 2026-08-12
+  - keywords: ["VITE_AUTH_PROVIDERS", "providers-registry", "tryCompleteLogin", "updateUserIfExists", "session dto", "SessionCreateDto"]
+last_verified: 2026-09-28
 ---
 
 Checklist and patterns for adding a new external login provider to Tapestries, alongside
 the two that ship today (`ia`, `google` — see `tapestry-client-features`/
-`tapestry-server-worker`). Generalized from two real, complete reference implementations —
-ORCID and MediaWiki OAuth logins — built on unmerged branches of a fork
-(`dbvisel/tapestry-project` branches `orcid-login`, `mediawiki-login`, each a single commit
-on top of that fork's `main`). **Neither provider exists on any current branch of
-`internetarchive/tapestry-project` or `dbvisel/tapestry-project`'s default branches** — they
-are reference examples for this skill, not implemented features. Don't tell a user ORCID or
-MediaWiki login already works; use these as the template for building a *new* one.
+`tapestry-server-worker`). Generalized from two OAuth-authorization-code implementations,
+at two different levels of realness — **be precise about which, when citing either**:
+
+- **ORCID** — a real, open PR against actual upstream:
+  [asteasolutions/tapestry-project#76](https://github.com/asteasolutions/tapestry-project/pull/76)
+  (`dbvisel/tapestry-project` branch `orcid-upstream`). Originally built against an older,
+  single-exclusive-provider client architecture; merged forward onto the current
+  multi-provider `VITE_AUTH_PROVIDERS`/`providers-registry.tsx` architecture (see
+  `tapestry-client-features`) as part of reconciling it with upstream `main` — the shape
+  described below is that *current*, merged-forward shape, not the PR's original commits.
+- **MediaWiki OAuth** — still only a reference implementation on an unmerged fork branch
+  (`dbvisel/tapestry-project` branch `mediawiki-login`, a single commit, never forward-merged
+  onto the current architecture). Useful for the server-side token-exchange shape (see
+  "Two token-exchange sub-cases" below) and as a second data point that the checklist
+  generalizes correctly — but don't tell a user MediaWiki login already works or exists on
+  any real branch.
 
 ## When to use this skill
 
@@ -105,42 +114,66 @@ consistent about this and mixing case breaks nothing at compile time but reads a
    ID is actually configured — no build-time branching needed server-side.
 8. **`server/src/resources/sessions.ts`** — add the dispatch branch:
    `if (request.authType === '<x>') return AUTH_PROVIDERS.<x>.login(request)`.
-9. **`client/src/config.ts`** — add `'<x>'` to the `VITE_AUTH_PROVIDER` Zod enum; add
-   `VITE_<X>_CLIENT_ID`/`VITE_<X>_BASE_URL`/`VITE_<X>_REDIRECT_URI` (base URL defaulted to
-   the provider's real endpoint, redirect URI defaulted to `''` meaning "use the app's own
-   origin at runtime"); expose as `config.<x> = { clientId, baseUrl, redirectUri }`.
-10. **`client/src/auth/<x>/service.ts`** — new file, `<X>AuthService extends AuthService<LoginWith<X>Dto>`:
-    - `login()`: build the authorize URL (`${baseUrl}/<authorize-path>` with
+9. **`client/src/config.ts`** — add `'<x>'` to the `AuthProviderEnum` Zod enum (this
+   automatically makes it a legal value inside the comma-separated `VITE_AUTH_PROVIDERS`
+   var — no separate single-provider var to touch); add `VITE_<X>_CLIENT_ID`/
+   `VITE_<X>_BASE_URL`/`VITE_<X>_REDIRECT_URI` (base URL defaulted to the provider's real
+   endpoint, redirect URI defaulted to `''` meaning "use the app's own origin at runtime");
+   expose as `config.<x> = { clientId, baseUrl, redirectUri }`.
+10. **`client/src/auth/<x>/service.ts`** — new file. **No service class** — the shared
+    `AuthService` (`client/src/services/auth.ts`) is a single instance used by every
+    provider, not subclassed per-provider. Export two plain functions instead:
+    - `start<X>Login()`: build the authorize URL (`${baseUrl}/<authorize-path>` with
       `client_id`/`response_type=code`/`redirect_uri` — plus any provider-specific params
-      like ORCID's `scope=/authenticate`), `window.location.assign(...)` to it, return
-      `Promise.resolve()` (the promise resolves once navigation *starts*, not when it's
-      done — there's nothing to await).
-    - Override `async refresh(loadUser?, signal?)`: read `code` from
-      `new URL(window.location.href)`'s search params. If present: strip
-      `code`/`error`/`error_description`/`state` from the URL via
+      like ORCID's `scope=/authenticate`), `window.location.assign(...)` to it. Nothing to
+      await; the navigation itself ends the current page's JS execution.
+    - `async tryComplete<X>Login(signal?): Promise<boolean>`: read `code` from
+      `new URL(window.location.href)`'s search params; return `false` immediately if
+      absent. If present: strip `code`/`error`/`error_description`/`state` from the URL via
       `window.history.replaceState` (so a page reload doesn't try to reuse a spent code),
-      then `await this.doLogin({ authType: '<x>', code, redirectUri: redirectUri() }, true, signal)`
-      and return. On failure, rethrow if `error instanceof CanceledError` (don't swallow an
-      abort), otherwise fall through. If no code, or the exchange failed non-fatally, call
-      `await super.refresh(loadUser, signal)` — this is what lets the normal
-      refresh-token-based session restore still work when there's no fresh OAuth code.
+      then `try { await auth.login({ authType: '<x>', code, redirectUri: redirectUri() }, signal); return true } catch (error) { if (error instanceof CanceledError) throw error; return false }`
+      — rethrow a genuine abort, but swallow an actual failed exchange and return `false` so
+      the caller falls back to the normal refresh-token flow instead of leaving the app stuck.
     - `redirectUri()` helper: `config.<x>.redirectUri || \`${window.location.origin}/\``.
-11. **`client/src/auth/<x>/login-button.tsx`** — new file, `<X>LoginButton`: guard
-    `if (auth instanceof <X>AuthService) void auth.login()` on click, render a
-    `Button`/`"Sign in with <X>"` — the `instanceof` guard matters because `auth` is a
-    single build-time-selected singleton (see next step), not necessarily this provider.
-12. **`client/src/auth/index.tsx`** — register the new service/button in **both**
-    `AUTH_SERVICES` and `LOGIN_BUTTONS` (`Record<ProviderName, ...>` maps) — see
-    `tapestry-client-features` for why this file is the build-time provider-selection hub.
+11. **`client/src/auth/<x>/login-button.tsx`** — new file, `<X>LoginButton`: no `instanceof`
+    guard needed (there's no per-provider service to distinguish `auth` from anymore) —
+    just `<Button onClick={start<X>Login}>Sign in with <X></Button>`.
+12. **`client/src/auth/providers-registry.tsx`** — add `<X>LoginButton` and
+    `tryComplete<X>Login` to `PROVIDER_MAP`:
+    `<x>: { id: '<x>', component: <X>LoginButton, tryCompleteLogin: tryComplete<X>Login }`.
+    This is the piece that doesn't exist yet for the two real providers upstream (`ia`,
+    `google` — neither needs a redirect-resume step) — check whether `AuthProviderItem`
+    still needs a `tryCompleteLogin?: (signal?) => Promise<boolean>` field added, and
+    `AuthService.refresh()` still needs the loop that calls it before falling through to
+    the refresh-token flow:
+    ```ts
+    async refresh(loadUser: boolean, signal?: GenericAbortSignal) {
+      for (const provider of AUTH_PROVIDERS) {
+        if (await provider.tryCompleteLogin?.(signal)) return
+      }
+      await this.doLogin({ authType: 'refreshToken' }, loadUser, signal)
+    }
+    ```
+    See `tapestry-client-features` for the rest of `providers-registry.tsx`'s shape (the
+    `PROVIDER_MAP`/`AUTH_PROVIDERS` pattern this plugs into).
 13. **Deployment wiring** — every place `VITE_GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_ID` currently
     flows needs a matching `VITE_<X>_*`/`<X>_*` entry: every `Dockerfile.client*` that builds
     the client (`ARG VITE_<X>_CLIENT_ID` etc.), every `docker-compose*.yml` that builds it
     (both the client's build `args:` and the server/worker's `environment:` block), and, if
     you're using the installer described in `tapestry-local-dev-environment`, `.env.sample`
-    and `setup.sh` (a new prompt block, gated on `if [ "$AUTH_PROVIDER" = "<x>" ]`, plus
-    `set_env` calls for each new var). Which exact files exist depends on which
+    and `setup.sh` (a new prompt block for the new secret, plus a `set_env` call for it —
+    the provider *selection* itself needs no new gating logic, since `AUTH_PROVIDERS` is
+    already a free-form comma-separated list; just document that `<x>` is now a legal value
+    in the existing prompt's help text). Which exact files exist depends on which
     deployment tooling your checkout has — verify with `git status`/`ls` rather than
     assuming; see `tapestry-local-dev-environment` for why file presence varies by branch.
+    **Verified real gotcha**: a bare rename of this var (singular → plural, or any future
+    rename) is easy to apply in `client/src/config.ts` and miss in one of these
+    deployment-config copies — the client won't error, it'll just silently fall back to the
+    schema's own default provider, which looks like a working app with the wrong (or no)
+    login option rather than an obvious failure. Grep for the old name across `.env`,
+    `.env.sample`, every `docker-compose*.yml`, and every `Dockerfile.client*` after any such
+    rename, not just the one file you were editing.
 14. **Docs** — add a provider section to the README's "Authentication Providers" list
     (one paragraph: how the flow works, which env vars to set, link to the provider's OAuth
     docs), and consider a dedicated `<X>.md` for registration steps specific to that
@@ -164,9 +197,9 @@ consistent about this and mixing case breaks nothing at compile time but reads a
   `window.history.replaceState` cleanup, reloading the page after login resends a spent
   `code` to the server, which will reject it — surfacing as a confusing failed-login loop
   on refresh rather than a clean logged-in state.
-- **Don't swallow `CanceledError` in the `refresh()` override.** It signals the caller
-  aborted the request (e.g. component unmounted) — rethrow it, only fall through to
-  `super.refresh()` on an actual failed exchange.
+- **Don't swallow `CanceledError` in `tryComplete<X>Login`.** It signals the caller
+  aborted the request (e.g. component unmounted) — rethrow it, and only return `false`
+  (falling through to the normal refresh-token flow) on an actual failed exchange.
 
 ## Guardrails
 

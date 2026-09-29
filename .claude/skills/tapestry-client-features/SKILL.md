@@ -7,8 +7,8 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry-project client", "client/src", "stage controller", "item factory", "canvas item type"]
   - keywords: ["ItemController", "EditorItemController", "socket-manager", "tapestry-updated"]
-  - keywords: ["auth provider", "VITE_AUTH_PROVIDER", "config.ts", "item toolbar"]
-last_verified: 2026-08-12
+  - keywords: ["auth provider", "VITE_AUTH_PROVIDERS", "providers-registry", "config.ts", "item toolbar"]
+last_verified: 2026-09-28
 ---
 
 Conventions for adding UI functionality to `tapestry-project`'s `client` — how the
@@ -151,37 +151,57 @@ add a new socket event, add it there first so client and server stay in sync.
 
 ## Auth providers
 
-Real providers today: **`ia` and `google` only** — the `VITE_AUTH_PROVIDER` Zod enum
-in `config.ts` has exactly these two literals, and both the auth-service and
-login-button lookup tables below only have entries for them.
+Real providers today: **`ia` and `google` only** — the `AuthProviderEnum` Zod enum in
+`config.ts` has exactly these two literals. The app can run **one or more at once**,
+configured via the comma-separated `VITE_AUTH_PROVIDERS` build-time var (e.g. `ia` or
+`google,ia`) — this was a single exclusive `VITE_AUTH_PROVIDER` enum in an earlier
+version of this codebase; don't follow an older reference that still shows that shape.
 
-`client/src/auth/index.tsx` is the provider-selection hub — a build-time switch, not a
-runtime one:
+`client/src/auth/providers-registry.tsx` is the provider-selection hub — a small
+`PROVIDER_MAP` keyed by the enum literal, filtered down to whatever `config.authProviders`
+actually lists:
 
 ```ts
-type ProviderName = typeof config.authProvider   // from VITE_AUTH_PROVIDER, config.ts
-const AUTH_SERVICES: Record<ProviderName, new () => AuthService> = { ia: IAAuthService, google: GoogleAuthService }
-const LOGIN_BUTTONS: Record<ProviderName, ComponentType<LoginButtonProps>> = { ia: IALoginButton, google: GoogleLoginButton }
-export const auth = new AUTH_SERVICES[config.authProvider]()
+export interface AuthProviderItem {
+  id: string
+  component: React.ComponentType<{ isSingleProvider?: boolean }>
+  prepare?: () => void   // one-time setup, e.g. Google's GSI initialize() call
+}
+const PROVIDER_MAP: Record<AuthProvider, AuthProviderItem> = {
+  google: { id: 'google', component: GoogleLoginButton, prepare: () => { /* GSI init */ } },
+  ia: { id: 'internet-archive', component: IALoginButton },
+}
+export const AUTH_PROVIDERS: AuthProviderItem[] = config.authProviders
+  .map((id) => PROVIDER_MAP[id])
+  .filter(Boolean)
 ```
 
-Each provider extends the abstract `AuthService<Credentials>` base
+`client/src/auth/index.tsx` holds a single, **non-per-provider** `export const auth = new
+AuthService()` (no more per-provider `AuthService` subclasses — `google/service.ts` and
+`internet-archive/service.ts` were both deleted). `LoginButton()` renders whichever
+single provider's own `component` directly when exactly one is configured, or
+`<LoginMenu />` (`client/src/components/auth-dialog/`) letting the user pick when more
+than one is. Each provider's button/dialog calls `auth.login(credentials)` directly
+(e.g. `client/src/auth/internet-archive/login-dialog/index.tsx`) — there's no per-provider
+service class to route through anymore. `AuthService`
 (`client/src/services/auth.ts`, an `Observable<AuthServiceState>` holding `accessToken`/
-`autoRefreshTimeout`). Provider implementations: `client/src/auth/google/{service.ts,login-button.tsx}`,
-`client/src/auth/internet-archive/{service.ts,login-button.tsx,login-dialog/index.tsx}`.
-A shared `RegistrationModal` (username selection) lives in `auth/index.tsx` and is driven
-by `auth.pendingRegistration` from the common base class.
+`autoRefreshTimeout`) calls every registered provider's `prepare?.()` once, via
+`doPrepare()` looping `AUTH_PROVIDERS`. A shared `RegistrationModal` (username selection)
+lives in `auth/index.tsx` and is driven by `auth.pendingRegistration` from that same class.
 
-**To add a new provider**: (1) add the literal to `VITE_AUTH_PROVIDER`'s Zod enum in
-`config.ts`, (2) create `client/src/auth/<provider>/service.ts` extending `AuthService`,
-(3) create `client/src/auth/<provider>/login-button.tsx`, (4) register both in the two
-`Record<ProviderName, ...>` tables in `auth/index.tsx`, (5) plumb any new `VITE_*`/
-server-side secret through `config.ts`, `Dockerfile.client*`, and the relevant
-`docker-compose*.yml` build args — and add the matching server-side strategy (see
-`tapestry-server-worker`'s Auth section; the server has its own, independent provider
-map keyed by `authType`, not by this same `ProviderName`). See `tapestry-auth-providers`
-for the complete checklist, including the OAuth authorization-code pattern most new
-providers actually need.
+**To add a new provider**: (1) add the literal to `AuthProviderEnum` in `config.ts`,
+(2) add an entry to `PROVIDER_MAP` in `providers-registry.tsx` with a `component` (and a
+`prepare` callback if it needs one-time setup, like Google's GSI init), (3) create
+`client/src/auth/<provider>/login-button.tsx` (or a dialog, for a credentials-form flow
+like IA's) that calls `auth.login({...})` directly — no service class to extend,
+(4) plumb any new `VITE_*`/server-side secret through `config.ts`, `Dockerfile.client*`,
+and the relevant `docker-compose*.yml` build args — and add the matching server-side
+strategy (see `tapestry-server-worker`'s Auth section; the server has its own,
+independent provider map keyed by `authType`, not by this same enum). **A provider
+using a full-page OAuth redirect (not Google's in-page popup) needs one more thing not
+yet in this map upstream** — a way to resume the login on page load when the URL carries
+an auth code — see `tapestry-auth-providers` for that pattern (a fork-only addition, not
+yet upstream) and the complete new-provider checklist.
 
 ## Build-time config (`client/src/config.ts`)
 
@@ -191,17 +211,23 @@ Single source of truth for all `import.meta.env` access — nothing else should 
 never the raw `VITE_*` name):
 
 ```ts
+export const AuthProviderEnum = z.enum(['google', 'ia'])
+const AuthProvidersSchema = z.string().default('google')
+  .transform((val) => (val.trim() === '' ? 'google' : val))
+  .transform((val) => val.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean))
+  .pipe(z.array(AuthProviderEnum))
+
 const parsedConfig = deepFreeze(z.object({
   VITE_API_URL: z.string(),
-  VITE_AUTH_PROVIDER: z.enum(['ia', 'google']).catch('google'),
-  VITE_GOOGLE_CLIENT_ID: z.string(),
+  VITE_GOOGLE_CLIENT_ID: z.string().default(''),
+  VITE_AUTH_PROVIDERS: AuthProvidersSchema,   // comma-separated, e.g. "google,ia"
   VITE_BUG_REPORT_FORM_URL: z.string(),
   VITE_AI_CHAT_EXPIRES_IN: OptionalInt(3600),
   VITE_WEBPAGE_LOADER_TIMEOUT: OptionalInt(3, (s) => s.nonnegative()),
   VITE_WBM_SNAPSHOT_POLLING_PERIOD: OptionalInt(600),
   VITE_STUN_SERVER: z.string(),
   VITE_SENTRY_DSN: z.string().default(''),
-}).transform((input) => ({ apiUrl: ..., authProvider: ..., /* camelCase fields */ })).safeParse(import.meta.env))
+}).transform((input) => ({ apiUrl: ..., authProviders: input.VITE_AUTH_PROVIDERS, /* camelCase fields */ })).safeParse(import.meta.env))
 export const config = parsedConfig.data
 ```
 
@@ -209,10 +235,16 @@ export const config = parsedConfig.data
 `.transform(...)`, use `config.xxx` everywhere — then add it to `Dockerfile.client`
 (`ARG VITE_XXX`) and the client build `args:` block in whichever `docker-compose*.yml`
 you're using (note the compose-level env var name doesn't have to match the `VITE_`
-name, e.g. compose `AUTH_PROVIDER` → build arg `VITE_AUTH_PROVIDER`, `SENTRY_DSN_CLIENT`
+name, e.g. compose `AUTH_PROVIDERS` → build arg `VITE_AUTH_PROVIDERS`, `SENTRY_DSN_CLIENT`
 → `VITE_SENTRY_DSN`). Vite inlines `VITE_*` at **build** time — per this user's own
 Docker guidance, changing a value requires an actual image rebuild, not a container
-restart; see `tapestry-local-dev-environment` for the rebuild command.
+restart; see `tapestry-local-dev-environment` for the rebuild command. **Verified real
+gotcha**: this exact var was renamed singular→plural upstream and three separate copies
+of the old name were found still live weeks later — `.env`/`.env.sample`,
+`docker-compose.minio.yml`'s build arg, and `Dockerfile.client-minio`'s matching `ARG` all
+have to be renamed together, or the client silently falls back to the schema's own
+`.default('google')` instead of erroring, which is easy to miss since the app still
+loads fine, just with the wrong (or no) provider configured.
 
 ## Adding a component — idiomatic shape
 

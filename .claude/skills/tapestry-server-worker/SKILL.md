@@ -164,7 +164,7 @@ follow this split — never write the plaintext secret to Postgres.
 
 ## Auth (server side)
 
-Not a single `AUTH_PROVIDER`-branching middleware — the server supports **all** provider
+Not a single `AUTH_PROVIDERS`-branching middleware — the server supports **all** provider
 types simultaneously; the client's login request carries an `authType` field, and
 `server/src/auth/providers/index.ts` maps it to a strategy: `AUTH_PROVIDERS: Record<SessionCreateDto['authType'], AuthProvider>`
 covering `refreshToken`, `gsi` (Google), `iaCookies`, `iaCredentials`, `registerUser`.

@@ -53,10 +53,12 @@ inlines `VITE_*` vars at build time). Fill in `server/.env`'s `SECRET_KEY`
 (any random string) and, if using Google auth, `GOOGLE_CLIENT_ID` in both
 files. Everything else in the `.example` files works for local dev as shipped.
 
-**Auth provider** — set `VITE_AUTH_PROVIDER` in `client/.env` to `ia` or
-`google` (the only two implemented — see `tapestry-client-features`). `ia`
-needs no further config; `google` needs a real OAuth client ID in both
-`GOOGLE_CLIENT_ID` (`server/.env`) and `VITE_GOOGLE_CLIENT_ID` (`client/.env`).
+**Auth provider(s)** — set `VITE_AUTH_PROVIDERS` in `client/.env` to a
+comma-separated list drawn from `ia`/`google` (the only two implemented — see
+`tapestry-client-features`), e.g. `ia` or `google,ia`. The app renders a login
+menu when more than one is configured. `ia` needs no further config; `google`
+needs a real OAuth client ID in both `GOOGLE_CLIENT_ID` (`server/.env`) and
+`VITE_GOOGLE_CLIENT_ID` (`client/.env`).
 
 ## 2. Start infrastructure
 
