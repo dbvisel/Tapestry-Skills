@@ -7,7 +7,7 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry visibility", "make tapestry public", "Samples list", "manage-tapestry-visibility.sh"]
   - keywords: ["private link public tapestry", "TapestryVisibility enum"]
-last_verified: 2026-08-19
+last_verified: 2026-10-21
 ---
 
 Change a tapestry's visibility on a live installation from the command line, via
@@ -47,10 +47,12 @@ REPO_DIR=.. ./manage-tapestry-visibility.sh <search>   # filter by title / slug 
 ./manage-tapestry-visibility.sh --help                 # show usage
 ```
 
-It lists matching tapestries in a numbered table (title, owner, slug, current
-visibility, id), lets you pick one, shows its current state, prompts for the new
-visibility, and **requires typing `yes`** to confirm before writing anything —
-safe to run without fear of an accidental one-key change or a fat-fingered
+It lists matching tapestries in a numbered table (title — truncated to 40 characters
+with a trailing `…` so long titles don't blow out the table's width, owner, slug,
+current visibility, id), lets you pick one, shows its current state (full,
+untruncated title), prompts for the new visibility, and **requires typing `yes`** to
+confirm before writing anything — safe to run without fear of an accidental one-key
+change or a fat-fingered
 selection.
 
 Under the hood it's a single `UPDATE "Tapestry" SET visibility = ... WHERE id = ...`
