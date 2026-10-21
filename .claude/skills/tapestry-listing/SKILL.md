@@ -1,6 +1,6 @@
 ---
 name: tapestry-listing
-description: Read-only report of every tapestry on a running installation (title, owner, last updated, view URL) via the bundled list-tapestries.sh script
+description: Read-only, sortable report of every tapestry on a running installation (title, owner, visibility, last updated, view URL) via the bundled list-tapestries.sh script
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -10,10 +10,11 @@ skill_discovery_hints:
 last_verified: 2026-10-21
 ---
 
-Print a read-only report of every tapestry on a running Tapestry installation:
-title, owner, when it was last updated, and its real view URL. No picking, no
-mutation — purely a status report, for when you want to see what's on an
-installation rather than change anything about it.
+Print a read-only, sortable report of every tapestry on a running Tapestry
+installation: title, owner, visibility, when it was last updated, and its
+real view URL. No picking, no mutation — purely a status report, for when
+you want to see what's on an installation rather than change anything about
+it.
 
 ## When to use this skill
 
@@ -27,18 +28,21 @@ installation rather than change anything about it.
 
 ```bash
 cd my-tapestry-repo/scripts
-REPO_DIR=.. ./list-tapestries.sh            # everything, most recently updated first
-REPO_DIR=.. ./list-tapestries.sh wikimania  # filter by title / slug / owner email
-./list-tapestries.sh --help                 # show usage
+REPO_DIR=.. ./list-tapestries.sh                      # everything, most recently updated first
+REPO_DIR=.. ./list-tapestries.sh wikimania            # filter by title / slug / owner email
+REPO_DIR=.. ./list-tapestries.sh --sort title         # sort by a different column
+REPO_DIR=.. ./list-tapestries.sh wikimania --sort owner  # filter and sort together
+./list-tapestries.sh --help                           # show usage
 ```
 
-It prints a table with four columns:
+It prints a table with five columns:
 
 - **title** — truncated to 40 characters with a trailing `…` so long titles
   don't blow out the table's width (same approach as `manage-tapestry-visibility.sh`)
 - **owner** — the owner's email if known, otherwise their raw user id (same
   `COALESCE(u.email, t."ownerId")` as `manage-tapestry-visibility.sh`, so the
   two scripts' output is consistent)
+- **visibility** — `Tapestry.visibility` (`private`/`link`/`public`), plain
 - **last_updated** — `Tapestry.updatedAt`, formatted `YYYY-MM-DD HH24:MI`
 - **url** — the tapestry's real view URL, `/u/<owner's username>/<slug>`
   (`client/src/utils/paths.ts`'s `tapestryPath()`, route registered in
@@ -51,7 +55,12 @@ It prints a table with four columns:
 Sorted most-recently-updated first by default, since this is a status report
 ("what's been active lately") rather than a lookup tool — unlike
 `manage-tapestry-visibility.sh`, which sorts alphabetically by title because
-you're picking one out by name.
+you're picking one out by name. Override with `--sort title`/`owner`/
+`visibility`/`updated` (or the `SORT` env var) — these are the only four
+accepted values, translated to a fixed `ORDER BY` expression via a `case`
+statement in the script, not interpolated directly into SQL, so there's no
+injection surface from this flag the way there could be with free-form
+column/direction input.
 
 Same connection mechanism as `manage-tapestry-visibility.sh`: runs
 `docker compose exec` against the `db` service, same `REPO_DIR`/`COMPOSE_FILE`/
