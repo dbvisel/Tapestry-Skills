@@ -26,6 +26,7 @@ directory layout.
 
 | Skill | Covers |
 |---|---|
+| [`tapestry-listing`](.claude/skills/tapestry-listing/SKILL.md) | Read-only report of every tapestry on a running installation (title, owner, last updated, view URL) via the bundled `list-tapestries.sh` script — no picker or mutation, see the next entry for that |
 | [`tapestry-visibility`](.claude/skills/tapestry-visibility/SKILL.md) | Managing a tapestry's visibility (private/link/public) on a running installation via the bundled `manage-tapestry-visibility.sh` script, including how "public" surfaces it in every client's "Samples" list |
 | [`tapestry-backups`](.claude/skills/tapestry-backups/SKILL.md) | Backing up a Tapestry installation's Postgres database and MinIO object storage via the bundled `backup-tapestry.sh` script (interactive or scheduled), plus how to restore |
 | [`tapestry-thumbnail`](.claude/skills/tapestry-thumbnail/SKILL.md) | Remaking a tapestry's own single card thumbnail (`Tapestry.thumbnail` — the dashboard/Samples preview) via the bundled `manage-tapestry-thumbnail.sh` script. Not per-frame thumbnails — see the next entry for that |

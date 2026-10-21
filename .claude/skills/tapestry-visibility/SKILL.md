@@ -19,6 +19,9 @@ Change a tapestry's visibility on a live installation from the command line, via
 - "What does public/link/private actually mean for a tapestry?"
 - Auditing or bulk-reviewing which tapestries are currently public
 - Reverting a tapestry made public by mistake
+- Just want a read-only listing (title, owner, last updated, URL), no picker
+  or mutation — see the sibling `tapestry-listing` skill instead, which
+  shares this skill's connection harness
 
 ## What visibility means
 
