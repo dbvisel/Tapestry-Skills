@@ -1,13 +1,13 @@
 ---
 name: tapestry-collection-imports
-description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, now generalized from three real (non-fork) implementations against actual upstream, each via an open PR — IA search (#96), and Openverse plus Wikimedia Commons together in one PR (#112, through two full review rounds as of this writing) that deliberately shares plumbing across both platforms — plus real, live-verified gotchas (a shared-component "clears the list on any failure" bug, cursor-based vs. numeric pagination, per-item media type dispatch for mixed-type collections) and real reviewer-driven corrections (reject a server-side proxy for a rate-limited API once CORS is confirmed and the real fix is disabling a list's background reload; give each platform a direct union member instead of nesting by a platform field; extract a shared list/UI component once a second list duplicates it, then split the per-platform container back apart once real type differences accumulate — a merge is not permanent; replace scattered per-platform ternaries with one per-type config function; verify a reviewer's speculative richer-data claim against the real API before building for it)
+description: Add a new bulk-import source to Tapestries' existing picker dialog — recognizing a URL for a collection of items (a Wikimedia Commons category, an Openverse tag search, an Internet Archive search query) and letting the user choose which to import, up to a selection cap. The picker mechanism itself is real, existing upstream functionality; this skill covers extending it, now generalized from three real (non-fork) implementations against actual upstream, each via an open PR — IA search (#96), and Openverse plus Wikimedia Commons together in one PR (#112, through at least three full review rounds as of this writing) that deliberately shares plumbing across both platforms — plus real, live-verified gotchas (a shared-component "clears the list on any failure" bug, cursor-based vs. numeric pagination, per-item media type dispatch for mixed-type collections) and real reviewer-driven corrections (reject a server-side proxy for a rate-limited API once CORS is confirmed, with the real fix being a shared list cache rather than disabling the list's background reload; give each platform a direct union member instead of nesting by a platform field; extract a shared list/UI component once a second list duplicates it, then split the per-platform container back apart once real type differences accumulate — a merge is not permanent; replace scattered per-platform ternaries with one per-type config function; verify a reviewer's speculative richer-data claim against the real API before building for it)
 license: MIT
 compatibility: claude-code
 depends_on: ["tapestry-external-media-sources"]
 skill_discovery_hints:
   - keywords: ["import picker", "CollectionImportDialog", "CollectionImport", "collection import", "bulk import"]
   - keywords: ["commons category", "openverse collection", "IA search import", "select all"]
-  - keywords: ["import-items-list", "LazyList", "MAX_SELECTION", "CollectionList", "shared list component"]
+  - keywords: ["import-items-list", "LazyList", "MAX_SELECTION", "BaseCollectionList", "shared list component"]
   - keywords: ["pendingRequests", "DoingWorkIndicator", "hourglass indicator", "slow confirm button", "no loading feedback"]
   - keywords: ["LazyListLoader total mismatch", "list clears itself", "picker items disappear", "full reload on total change"]
   - keywords: ["cursor pagination", "gcmcontinue", "WikimediaCursorStore", "opaque cursor vs page number"]
@@ -17,8 +17,8 @@ skill_discovery_hints:
   - keywords: ["rename type outgrows scope", "IAImport to CollectionImport", "handle-ia-import-dialog rename"]
   - keywords: ["maps instead of ternaries", "per-type config object", "describeExternalCollection"]
   - keywords: ["un-merge after review", "split list back into per-platform components", "split factory into per-platform factories", "openverseFactory wikimediaFactory", "OpenverseCollectionList WikimediaCollectionList"]
-  - keywords: ["CollectionListProps Pick LazyListProps", "rest parameter props forwarding", "commons category thumbnail", "pageimages piprop", "extracts empty for category"]
-last_verified: 2026-09-16
+  - keywords: ["BaseCollectionListProps Pick LazyListProps", "rest parameter props forwarding", "commons category thumbnail", "pageimages piprop", "extracts empty for category"]
+last_verified: 2026-10-28
 ---
 
 Checklist for adding a new **bulk-import source** — a URL that names a *collection* of
@@ -31,7 +31,7 @@ anywhere; it only drives the picker.
 
 **The picker mechanism is real, existing upstream functionality** — `CollectionImportDialog`,
 `CollectionImport`, and the whole `import-items-list/` component tree already exist on
-`internetarchive/tapestry-project` `main` with real commit history (code review, bug fixes),
+`asteasolutions/tapestry-project` `main` with real commit history (code review, bug fixes),
 originally built for Internet Archive collections and playlists. **This skill is about
 extending that mechanism with a new collection type**, generalized from three real (not
 fork-only) extensions of exactly this kind, all built against actual upstream and opened as
@@ -53,13 +53,16 @@ real PRs:
   `WikimediaCommonsCategory` (plus their single-file counterparts, image/audio/video/PDF),
   opened as
   [asteasolutions/tapestry-project#112](https://github.com/asteasolutions/tapestry-project/pull/112)
-  (2026-09-03). Through two real review rounds (2026-09-14, 8 threads; 2026-09-16, 9
-  threads) as of this writing, all addressed and resolved, still open/unmerged. This PR
+  (2026-09-03). Through at least three real review rounds (2026-09-14, 8 threads;
+  2026-09-16, 9 threads; and a further round after that, not all individually itemized
+  below) as of this writing, all addressed and resolved, still open/unmerged. This PR
   deliberately generalizes across *two* platforms at once — see "Generalizing across
   multiple platforms in one PR" below for the design that resulted (and what review
-  corrected in it, across both rounds — round 2 partially *reversed* round 1's own
-  merge, see "Round 2: un-merging what round 1 merged" below), and "Real PR review
-  feedback" for exactly what each round asked for.
+  corrected in it — round 2 partially *reversed* round 1's own merge, see "Round 2:
+  un-merging what round 1 merged" below; a later round simplified Wikimedia's pagination
+  further and changed the rate-limit fix from disabling `autoReload` to a cache, see
+  "Pagination mechanics are not the same shape" and the `autoReload` guardrails below),
+  and "Real PR review feedback" for exactly what the first two rounds asked for.
 
 **So as of this writing, `IACollection`, `IAPlaylist` (long-standing upstream), and
 `IASearchCollection`/`OpenverseCollection`/`WikimediaCommonsCategory` (open, unmerged PRs)
@@ -162,18 +165,18 @@ the picker UI.
    Also a plain `if` chain, not type-checked.
 6. **`client/src/components/collection-import-dialog/import-items-list/<x>-list/index.tsx`**
    (new component) — implements the shared list contract, now **on top of the real,
-   shared `CollectionList` component**
-   (`import-items-list/collection-list/index.tsx`), not a hand-rolled `<LazyList>` wrapper.
+   shared `BaseCollectionList` component**
+   (`import-items-list/base-collection-list/index.tsx`), not a hand-rolled `<LazyList>` wrapper.
    **This is a per-platform container** (`OpenverseCollectionList`,
    `WikimediaCollectionList` — see "Round 2: un-merging what round 1 merged" below for why
    these are two components, not one shared `ExternalCollectionList`), built on the one
    genuinely shared primitive:
-   - `CollectionListProps<T>` derives its shared fields from `LazyListProps<T>` with
+   - `BaseCollectionListProps<T>` derives its shared fields from `LazyListProps<T>` with
      `Pick` (`extends Pick<LazyListProps<T>, 'requestItems' | 'windowSize' |
      'loadingEdgeProximity' | 'autoReload' | 'onLoaderInitialized' | 'header'>`) plus its
      own render-prop fields, instead of hand-redeclaring those six fields. A caller
      destructures only the fields it actually uses itself and forwards the rest straight
-     through with a rest parameter (`<CollectionList {...lazyListProps} renderItemContent=
+     through with a rest parameter (`<BaseCollectionList {...lazyListProps} renderItemContent=
      {...} ... />`) rather than re-listing every pass-through prop by name. Reuse this
      `Pick`-plus-rest shape any time a new component wraps an existing props interface and
      only needs to add or intercept a few of its fields.
@@ -184,7 +187,7 @@ the picker UI.
      capped-size batch and slices it in memory; a genuinely paginated API would forward
      `skip`/`limit` to real API params instead — check which shape your platform's API
      actually offers).
-   - The component itself: render `<CollectionList requestItems={...} windowSize={...}
+   - The component itself: render `<BaseCollectionList requestItems={...} windowSize={...}
      loadingEdgeProximity={...} classes={...} renderItemContent={...}
      renderItemDetails={...} isSelected={...} onSelectItem={...} selectedCount={...}
      detailsGroupName="<x>-list" emptyPlaceholder={...} />` — it owns the checkbox
@@ -205,7 +208,7 @@ the picker UI.
      first (PR #96) a near-total copy of an existing list component was rejected —
      "This looks like an almost complete copy of IACollectionList. Why don't we just
      remove IACollectionList and rename this to IASearchList instead" — merging what
-     had been two components (an old `collection-list/`, since removed, and
+     had been two components (an old `base-collection-list/`, since removed, and
      `search-list/`) into one, parameterized by the raw query string. Then (PR #112),
      once a *second* genuinely different list (`ExternalCollectionList`, backed by a
      different API entirely) existed, review asked for the shared UI shell those two
@@ -213,11 +216,11 @@ the picker UI.
      collection-list component, which is used by all imports except playlist... We can
      have additional components like wikimedia import which render the base component
      and handle more specific logic if necessary." That shell is
-     `CollectionList` — reuse it rather than reintroducing the duplication a third
+     `BaseCollectionList` — reuse it rather than reintroducing the duplication a third
      time. Reserve a genuinely separate list implementation only for a case that needs
-     a different data-fetching shape (a different paginated API) than `CollectionList`
+     a different data-fetching shape (a different paginated API) than `BaseCollectionList`
      itself assumes — not for a case that only needs different item rendering, which
-     `CollectionList`'s render-prop seams already cover.
+     `BaseCollectionList`'s render-prop seams already cover.
 7. **`client/src/components/collection-import-dialog/import-details/index.tsx`** — add a
    branch showing the collection's name/id, its `total` count, and a "View on \<platform\>"
    link back to the original collection page. Also a plain `if` chain. **Don't assume a
@@ -226,15 +229,23 @@ the picker UI.
    we can extract more details from the commons category like description and
    image"*), and checking the speculative claim against the real Commons API before
    building anything found a real, verified nuance: `prop=extracts` (Wikipedia's
-   article-summary endpoint) always returns an **empty** string for a Commons category
-   (confirmed against three real categories — categories are templated, not prose, so
-   there's no actual description to extract), but `prop=pageimages`/`piprop=thumbnail`
-   **does** resolve a real representative thumbnail for the category
-   (`fetchWikimediaCollectionThumbnail`, `core/src/wikimedia-commons.ts`). Built exactly
-   what the API actually supports (a thumbnail, no description) rather than either the
-   reviewer's speculative "description and image" or dismissing the ask outright —
-   verify a reviewer's speculative richer-data claim against the live API before deciding
-   how much to build.
+   article-summary endpoint) almost always returns an **empty** string for a Commons
+   category (confirmed against three real categories — categories are templated, not
+   prose, so there's rarely any actual description to extract), while
+   `prop=pageimages`/`piprop=thumbnail` **does** reliably resolve a real representative
+   thumbnail for the category. The shipped implementation
+   (`fetchWikimediaCategoryDetails`, `core/src/wikimedia-commons.ts`) still requests all
+   three — `pageimages|extracts|categoryinfo` — in **one combined API call** rather than
+   making a separate round-trip per field, returning
+   `{ thumbnail: string | null, description: string | null, total: number | undefined }`.
+   `description` is simply `null` whenever `extracts` comes back empty (the common
+   case), rather than being omitted from the type or the request — the field exists and
+   is wired all the way through to the `WikimediaCommonsCategory` member and its details
+   view, it's just frequently empty in practice. This is a cheaper and more complete
+   answer than either the original "thumbnail only, no description field at all" build
+   or the reviewer's full speculative "description and image" ask: build what the API
+   supports, as one request, with the rarely-populated field left in rather than
+   stripped out — don't assume "usually empty" means "not worth a field."
 8. **`MAX_SELECTION`** (`collection-import-dialog/index.tsx`) is a single shared constant —
    **the real upstream default is 50**, applied uniformly to every collection type
    (including `IACollection`/`IAPlaylist`). Don't introduce a per-type selection cap; if a
@@ -258,8 +269,8 @@ actually shipped:
   `ExternalCollectionList` with `platform === 'openverse'` branches scattered through
   it); review asked for the *shell* itself — the checkbox wiring, the mobile-details/
   desktop-row switch, the `LazyList` plumbing — to be factored out into its own
-  component (`CollectionList`,
-  `client/src/components/collection-import-dialog/import-items-list/collection-list/`),
+  component (`BaseCollectionList`,
+  `client/src/components/collection-import-dialog/import-items-list/base-collection-list/`),
   reusable by `IASearchList` too, not just the two external platforms. See step 6 above
   for the current shape. **This held up only at the shell layer — the container built on
   top of it (`ExternalCollectionList` itself) did not stay merged past round 2; see
@@ -306,10 +317,17 @@ first draft's guesses:**
   from the browser. The *actual* rate-limit risk wasn't picker pagination at all, it
   was `client/src/components/lazy-list/lazy-list-loader.ts`'s `LazyListLoader`
   `autoReload` option, which defaults to `true` and polls the same request again every
-  10 seconds for as long as the picker dialog stays open — `autoReload={false}` on
-  the collection-import list is the real fix the reviewer was pointing at. The proxy
-  and its Redis cache were removed entirely; see "stays separate" below for what
-  replaced the one genuinely client-specific piece (Wikimedia's cursor store).
+  10 seconds for as long as the picker dialog stays open. **The fix that actually
+  shipped is not `autoReload={false}`, though that was the reviewer's own suggested
+  wording** — `BaseCollectionList` keeps `autoReload` at its default and instead caches
+  everything already fetched (indexed by absolute position), so a periodic reload's
+  re-request of an already-loaded window is served from that cache instead of hitting
+  the external API again (see `tapestry-pr-conventions` point 19 for the generalized
+  version of this — accepting a reviewer's diagnosis doesn't require accepting their
+  exact proposed fix verbatim, when a different fix solves the same problem without
+  losing the feature `autoReload` provides). The proxy and its Redis cache were removed
+  entirely; see "stays separate" below for what replaced the one genuinely
+  client-specific piece (Wikimedia's cursor handling).
   **Generalizable shape: before building a server-side proxy/cache to protect a
   rate-limited third-party API, check (a) whether the API actually supports direct
   browser calls via CORS, and (b) whether the real trigger is something more specific
@@ -333,25 +351,35 @@ first draft's guesses:**
 - **Pagination mechanics are not the same shape, and forcing them to look the same
   would have been fake generalization.** Openverse's real pages are independently
   addressable by number (`fetchOpenverseCollectionPage(mediaType, collection, page,
-  pageSize)` — pure, stateless, page-in/page-out). Wikimedia Commons categories paginate
-  with an **opaque cursor** (`gcmcontinue`), confirmed live: there is no way to jump
-  directly to page 5 without first knowing page 4's cursor, unlike Openverse's `page=N`.
-  The fix that keeps both platforms behind the same external contract
-  (`fetchXCollectionResults(query, page, pageSize, signal) -> {total, results}`) without
-  papering over the real difference: `fetchWikimediaCollectionResults` takes an injected
-  `WikimediaCursorStore` (`{ get(realPage): Promise<string|null|undefined>;
-  set(realPage, cursor): Promise<void> }`) — the pure walking algorithm (which real pages
-  the requested window spans, walk forward from the first not-yet-known one) lives in
-  `core/` and is testable without I/O. The real store is wired by
-  `client/src/lib/external-media.ts`, as a plain in-memory `Map`, scoped to the browser
-  session (no server round-trip at all, now that there is no proxy — see above). A
-  discovered cursor never goes stale, so there is no TTL to think about; losing it on a
-  page reload just means re-walking the chain once, which is a fine cost for something
-  this rare. **This cursor-store-as-injected-dependency shape is the reusable pattern
-  for any future platform whose collection API also paginates by opaque cursor rather
-  than page number** — don't try to force it through the same page-remapping math
-  Openverse uses, and don't assume the store has to be server-side just because the
-  original draft of this pattern put it there.
+  pageSize)`, `core/src/openverse.ts` — pure, stateless, page-in/page-out, capped at
+  `OPENVERSE_MAX_PAGE_SIZE`). Wikimedia Commons categories paginate with an **opaque
+  cursor** (`gcmcontinue`), confirmed live: there is no way to jump directly to page 5
+  without first knowing page 4's cursor, unlike Openverse's `page=N`.
+  `fetchWikimediaCategoryResults(category, cursor, signal)` (`core/src/wikimedia-commons.ts`)
+  takes the previous call's own returned cursor directly and returns
+  `{ results, nextCursor }` — a plain one-request-in, one-request-out function, no
+  injected store.
+
+  **This is a later, simpler architecture than an earlier draft's injected
+  `WikimediaCursorStore` abstraction** (a `{ get(realPage); set(realPage, cursor) }`
+  interface wired from `client/src/lib/external-media.ts` as a page-indexed `Map`,
+  intended to let the walk-forward algorithm live once in `core/` and be reused across
+  callers). That file and type no longer exist in the shipped code. In the final shape,
+  each list component (`OpenverseCollectionList`/`WikimediaCollectionList`,
+  `import-items-list/<platform>-collection-list/index.tsx`) owns its own walk-forward
+  loop directly in a `useMemo`-captured closure: a local `fetched` array plus (for
+  Wikimedia) a `nextCursor` variable, re-fetching one real page/cursor-step at a time
+  until the buffer covers whatever window `<LazyList>` actually requested, then slicing
+  the buffer to size. The two platforms' loops read almost identically apart from what
+  they call and how they track "are we done" (Openverse: `fetched.length >=
+  page.result_count`; Wikimedia: `nextCursor === undefined`) — close enough that a
+  shared walk-forward helper remains a reasonable thing to extract if a third
+  cursor/page-based platform arrives, but as of this writing neither platform's version
+  has been pulled out into one. **Prefer this simpler shape for a new platform**: keep
+  the pagination state as a plain closure inside the list component that owns it,
+  rather than re-introducing a separate injected-store abstraction — that was explored
+  once already and simplified away once there was no longer a server-side proxy/cache
+  layer that justified decoupling the store from the walking algorithm.
 - **A collection is not always scoped to one media type — check the platform's real
   behavior, don't assume Openverse's shape generalizes.** Openverse's URL scheme scopes
   a collection query to exactly one media type (`/image/collection?tag=X` vs.
@@ -390,7 +418,7 @@ point 1 exists to avoid duplicating *and* the shape a shared component should ne
 forced onto itself in the first place. Splitting removed the narrowing; it did not
 reintroduce ~90%-identical code, since what's left in each per-platform file is genuinely
 platform-specific (item rendering, detail columns, parsing). **What stayed merged**: the
-lower-level `CollectionList` shell (see above) — round 2 only split the layer that had
+lower-level `BaseCollectionList` shell (see above) — round 2 only split the layer that had
 accumulated real per-platform type differences, not the layer that was still genuinely
 platform-agnostic. See `tapestry-pr-conventions` point 25 for the generalized version of
 this lesson: a past merge is worth re-checking against point 1's own "differs only in a
@@ -407,9 +435,13 @@ extend is smaller than the pre-review shape implied:
 1. `core/src/<platform>.ts` (new, separate module — see `tapestry-external-media-sources`
    for the single-item resolver conventions this follows). Decide pagination shape first,
    since it drives the rest: numeric (`fetchXCollectionPage(query, page, pageSize)`, pure)
-   if the platform's API supports jumping to an arbitrary page directly, or the
-   `WikimediaCursorStore`-style injected-dependency shape if it only exposes an opaque
-   continuation token. **Check whether the platform's API sends
+   if the platform's API supports jumping to an arbitrary page directly, or a
+   `fetchXCollectionResults(cursor, signal) -> { results, nextCursor }` shape (matching
+   `fetchWikimediaCategoryResults`) if it only exposes an opaque continuation token —
+   either way, a plain function taking the previous call's own cursor/page, not an
+   injected store (see "Pagination mechanics are not the same shape" above for why an
+   earlier, more elaborate injected-store design was simplified away). **Check whether
+   the platform's API sends
    `access-control-allow-origin` for the endpoints you need before assuming a
    server-side proxy is necessary** — if it does, call it directly from `core/` the way
    Openverse/Wikimedia Commons do; don't reach for a proxy by default. If it genuinely
@@ -419,12 +451,12 @@ extend is smaller than the pre-review shape implied:
    (`client/src/pages/tapestry/view-model/index.ts`) — not a shared wrapper nested by
    `platform`. Follow the existing member shape (`{ type: '<X>Collection', ...,
    total: number }`), matching `OpenverseCollection`/`WikimediaCommonsCategory`.
-3. `client/src/lib/external-media.ts` — only add something here if the new platform
-   needs real client-specific behavior beyond calling its `core/` function directly (an
-   in-memory cache, a cursor store, request coalescing). If it doesn't, call the
-   `core/` function straight from wherever it's needed — most of this file's original
-   pass-through wrapper functions were removed for exactly this reason once the proxy
-   went away.
+3. **No separate client-side wrapper module is needed for pagination state.** An
+   earlier draft kept one (`client/src/lib/external-media.ts`, for an injected cursor
+   store) — it no longer exists. Call the `core/` function straight from the list
+   component that needs it, keeping any walk-forward/buffering state as a local
+   `useMemo`-captured closure inside that component (see `OpenverseCollectionList`/
+   `WikimediaCollectionList`), not a shared module.
 4. `client/src/stage/item-factories.ts` — add a new `<platform>Factory`, matching the
    post-round-2 shape (`openverseFactory`/`wikimediaFactory`), not a shared multi-platform
    factory with sequential parse-attempt blocks — round 2 already rejected that shape for
@@ -433,13 +465,14 @@ extend is smaller than the pre-review shape implied:
    it either.
 5. Add a new `<Platform>CollectionList` component (see step 6 of the main checklist),
    the same way `OpenverseCollectionList`/`WikimediaCollectionList` each wire the shared
-   `CollectionList` shell with their own `renderItemContent`/`renderItemDetails`/
+   `BaseCollectionList` shell with their own `renderItemContent`/`renderItemDetails`/
    `emptyPlaceholder` — not a scattered `platform === '<platform>'` check bolted onto an
    existing list. Same idea in `import-details/index.tsx`: one more per-type component,
    not one more ternary branch.
-6. `LazyList`'s `autoReload` should stay `false` for this list too, for the same reason
-   it is for the existing two platforms — a rate-limited third-party API gains nothing
-   from a background poll while the picker is open. Don't reintroduce it by omission.
+6. You don't need to disable `autoReload` for a new rate-limited platform — the shared
+   `BaseCollectionList` cache (see "Real, live-verified bugs" above) already serves a
+   periodic reload's re-request of an already-fetched window from memory rather than
+   re-calling the external API, for every list built on it, including a new one.
 7. Decide per-item vs. collection-level `mediaType` based on the *new* platform's real
    behavior (does one collection ever mix types?), by-reference vs. real copy, and
    whether resolved URLs need the `notes: Source: <url>` treatment — don't assume any of
@@ -473,15 +506,18 @@ extend is smaller than the pre-review shape implied:
   path. Both Openverse (Cloudflare bot-mitigation on request bursts) and Wikimedia Commons
   (a real, live-confirmed burst rate limit: 9 of 20 concurrent unauthenticated requests
   came back `429`) rate-limit exactly the kind of request pattern a scrolling picker
-  produces. **Fix, in two layers**: retry a fetch a few times with a real delay before
-  ever reporting failure to `LazyListLoader` (`external-collection-list/index.tsx`'s
-  `fetchPageWithRetry` — 3 attempts, 4 seconds apart, aborting cleanly if the request is
-  superseded) absorbs a transient burst-limit hit during real pagination; and — added in
-  review, see "Real PR review feedback" below — `autoReload={false}` on this list
-  removes the periodic-reload trigger for this specific bug entirely, since the reload
-  that could flash the list empty simply never fires. Keep the retry logic regardless:
-  it still covers a real page-load or "load more while scrolling" failure, which
-  `autoReload={false}` does nothing for.
+  produces. **An earlier draft's fix doesn't match the shipped code**: a retry-with-delay
+  wrapper (`fetchPageWithRetry` — 3 attempts, 4 seconds apart, on the now-removed
+  round-1 merged list component) no longer exists anywhere in the final implementation.
+  What actually ships is `BaseCollectionList`'s position-indexed cache (see above and
+  `tapestry-pr-conventions` point 19) — since `autoReload` stays enabled and a periodic
+  reload of an already-loaded window is served from the cache rather than re-fetched at
+  all, there's no repeated real request for a transient rate-limit to hit in the first
+  place during normal (non-scrolling) dialog-open time. This doesn't cover every case a
+  retry wrapper would have (a genuine first-time page load or "load more while
+  scrolling" still makes a real request that can still transiently fail) — if you hit
+  that gap on a new platform, a retry wrapper is a reasonable thing to reintroduce, it
+  just isn't present today.
 - **A cache asymmetry worth remembering even though it no longer applies to this
   code**: an earlier draft of this feature cached `external-collection-results`
   responses in Redis behind a server-side proxy (necessary at the time — see the
@@ -670,8 +706,8 @@ a caveat to it — summarized here for the record:
   additional components like wikimedia import which render the base component and handle
   more specific logic if necessary." This is the same "merge near-duplicate siblings"
   principle `tapestry-pr-conventions` point 1 documents for non-UI code
-  (`IASearchList`/`collection-list` in PR #96), recurring here specifically for a shared
-  UI/interaction shell (`CollectionList`) — worth expecting on any future PR that adds a
+  (`IASearchList`/`base-collection-list` in PR #96), recurring here specifically for a shared
+  UI/interaction shell (`BaseCollectionList`) — worth expecting on any future PR that adds a
   second list/detail component sharing most of its structure with an existing one.
 
 One more real finding, not folded above because it doesn't change this skill's
@@ -684,7 +720,7 @@ recommended *design*, only how to write the code once you're implementing it —
   `import-details/index.tsx`'s `label`/`noun` computation (Openverse: tag vs. source,
   image vs. audio; Wikimedia: always "files") became
   `OpenverseCollectionDetails`/`WikimediaCommonsCategoryDetails`, and
-  `external-collection-list/index.tsx`'s five separate `platform === 'openverse'`
+  `external-base-collection-list/index.tsx`'s five separate `platform === 'openverse'`
   branches (detail columns, detail header, item media-type fallback, empty placeholder,
   which `fetch*` function to call) collapsed into one `describeExternalCollection`
   function returning a single per-type config object. **A literal `Record` map can't
@@ -804,23 +840,31 @@ URL can differ from what the user recognizes.
 12. **Don't assume a collection is scoped to one media type** — verify the platform's
     real behavior. If it can mix types, give every listed item its own `mediaType`
     field rather than a single collection-level one.
-13. **Retry a rate-limited/failed fetch a few times before reporting failure upward**,
-    rather than letting a single transient hit propagate into a visible glitch. If you
-    also add server-side caching for some other reason, give a cached failure a much
-    shorter TTL than a cached success — but don't reach for caching, or a server-side
-    proxy at all, just to protect against a third-party rate limit (see guardrail 15).
+13. **Consider retrying a rate-limited/failed fetch a few times before reporting
+    failure upward**, rather than letting a single transient hit propagate into a
+    visible glitch — this is reasonable general advice but isn't currently implemented
+    anywhere in the shipped code (an earlier retry wrapper was removed; see "Real,
+    live-verified bugs" above). If you also add server-side caching for some other
+    reason, give a cached failure a much shorter TTL than a cached success — but don't
+    reach for caching, or a server-side proxy at all, just to protect against a
+    third-party rate limit (see guardrail 15).
 14. **Check whether a third-party API actually needs a server-side proxy before
     building one.** Verify real CORS support (a live `curl -D -` against the actual
     endpoint, not general reputation) before assuming the client can't call it
     directly. If the real trigger for a rate-limit worry is a list's own periodic
-    background reload rather than picker pagination itself, `autoReload={false}` on
-    that `LazyList`/`CollectionList` is very likely the actual fix — check for it
-    before reaching for server-side infrastructure. See "Generalizing across multiple
-    platforms in one PR" above.
-15. **Set `autoReload={false}` on any collection-import list backed by a rate-limited
-    third-party API.** The default (`true`, a background reload every 10 seconds for as
-    long as the picker stays open) buys nothing here and is a real, verified way to
-    trip a rate limit with no user action at all.
+    background reload rather than picker pagination itself, check whether the shared
+    list component already has (or should get) a cache serving an already-loaded
+    window's repeat requests — that's what actually shipped here, not disabling the
+    reload (see guardrail 15) — before reaching for server-side infrastructure. See
+    "Generalizing across multiple platforms in one PR" above.
+15. **A cache that serves an already-fetched window's repeat requests, not
+    `autoReload={false}`, is this codebase's real fix for a rate-limited list's
+    periodic-reload risk.** An earlier draft's reviewer-suggested fix (disable
+    `autoReload`) was superseded by `BaseCollectionList`'s own position-indexed cache
+    before the PR shipped — `autoReload` stays at its default (`true`) on every
+    collection-import list today. Don't disable `autoReload` on a new platform's list
+    expecting to match current convention; rely on the shared cache instead, and only
+    reach for something list-specific if that cache genuinely doesn't cover your case.
 16. **Rename a type/identifier once it outgrows the scope its name implied** — expect a
     reviewer to ask for this the first time a mechanism named after one platform (`IA*`)
     starts serving more than one. Check every identifier carrying the old name
@@ -831,7 +875,7 @@ URL can differ from what the user recognizes.
     exists that duplicates it**, not just parameterize the first list further — the
     same "merge near-duplicate siblings" principle as guardrail 4, applied to a
     component's structure and behavior rather than to a query string. See
-    `CollectionList` and "Real PR review feedback (2026-09-14)" above. **This applies to
+    `BaseCollectionList` and "Real PR review feedback (2026-09-14)" above. **This applies to
     the genuinely platform-agnostic shell only** — once a merged *container* built on
     top of that shell starts needing real per-variant type-narrowing (`'x' in item`), the
     container should split back apart even though the shell underneath stays merged; see

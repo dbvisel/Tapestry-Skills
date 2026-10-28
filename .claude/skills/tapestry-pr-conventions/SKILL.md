@@ -1,6 +1,6 @@
 ---
 name: tapestry-pr-conventions
-description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name, put type-specific branching in the factory/dispatcher that owns recognizing that input shape, nest CSS selectors instead of repeating a parent one, audit the whole branch diff against main for scope creep before every round, pick the schema-derivation base needing the fewest exclusions, and re-check a past merge for real structural drift that means it should un-merge — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
+description: Code-review conventions actually observed from real asteasolutions/tapestry-project maintainers (zmarinov-astea, and now also Sachanski) across four real PRs (#96, IA search-query import; #109, client-side HEIC import; #123, Clover IIIF viewer rework; #112, Openverse/Wikimedia Commons collection import), nine-plus review rounds, and one direct design question outside GitHub — comment discipline (including a TODO exception), merge-don't-duplicate (for both business logic and shared UI/list components), composition over internal dependency, trust the strongest already-available signal (including real file-content sniffing over metadata/extension guesses, but check its own boundary conditions), colocate small helpers with their siblings instead of a dedicated file, match the full input space of the pipeline you're plugging into, fit the actual API surface instead of an assumed one, distinguish a missing value from a meaningless-but-present one, prefer a documented known limitation over a partial workaround for a rare upstream bug, verify a suspected dependency-declaration gap by reading the real package.json, replace ternary sprawl on a discriminant field with one per-branch config function, don't reach for a server-side proxy before checking real CORS support and simpler client-side fixes, give a discriminated union direct members instead of nesting a second dimension inside one, rename a type once its scope outgrows its name, put type-specific branching in the factory/dispatcher that owns recognizing that input shape, nest CSS selectors instead of repeating a parent one, audit the whole branch diff against main for scope creep before every round, pick the schema-derivation base needing the fewest exclusions, and re-check a past merge for real structural drift that means it should un-merge, and verify a reviewer's own suggested fix before applying it verbatim — plus a pre-submission self-review checklist to catch these before the reviewer does, the concrete gh/GraphQL commands (including a real empty-review-body gotcha and a re-check-before-assuming-a-thread-is-pending gotcha) for replying to and resolving PR review comments, and a project-standing (not reviewer-observed) ASD-STE100 writing-style rule for comments and replies. Not invented best practices; specific, verified feedback from the actual gatekeepers who review PRs to this repo, clearly separated from this project's own style preferences
 license: MIT
 compatibility: claude-code
 depends_on: ["asd-ste100"]
@@ -23,7 +23,8 @@ skill_discovery_hints:
   - keywords: ["unrelated change outside task scope", "whole branch diff against main", "leftover change from earlier round", "stray formatting change"]
   - keywords: ["schema derivation base", "fewest field exclusions", "closest semantic match", "export version schema"]
   - keywords: ["un-merge after review", "split shared component back apart", "merge is not permanent", "runtime type narrowing signals un-merge"]
-last_verified: 2026-09-16
+  - keywords: ["reviewer's suggested fix is wrong", "verify a maintainer's suggestion", "Math.min vs Math.max", "don't apply a review suggestion verbatim"]
+last_verified: 2026-10-01
 ---
 
 What real reviewers at `asteasolutions/tapestry-project` actually asked for, across
@@ -38,14 +39,14 @@ rework — see `tapestry-content-types`' IIIF reference), and
 [#112](https://github.com/asteasolutions/tapestry-project/pull/112) (Openverse/Wikimedia
 Commons collection import, two review rounds — see `tapestry-collection-imports`, points
 18-20 and 25). **Points
-1-11 and 16-25 are all `zmarinov-astea`**, verified across all four PRs — feedback that
+1-11 and 16-26 are all `zmarinov-astea`**, verified across all four PRs — feedback that
 recurs in the same shape across unrelated features is a stable preference of that
 gatekeeper, not a one-PR quirk. **Points 12-15 are a second reviewer, `Sachanski`**, on a
 later round of PR #109 and a round of PR #96 — their feedback so far is consistent in
 spirit with `zmarinov-astea`'s (avoid unneeded complexity, don't duplicate, prefer the
 strongest real signal), so treat both as this repo's actual review bar rather than one
 person's idiosyncrasy, but keep the attribution honest since it's only been one round
-each from Sachanski so far — less evidence than points 1-11/16-24 have. Every piece of feedback below was
+each from Sachanski so far — less evidence than points 1-11/16-26 have. Every piece of feedback below was
 phrased as a general principle, not a feature-specific nitpick, so treat it as worth
 applying proactively on any future PR to this project rather than waiting to be told
 again. Whoever is about to open or update a PR here — this skill is meant to be run as a
@@ -327,8 +328,17 @@ consulted after a reviewer has already commented.
     calling them directly from the browser — and the actual rate-limit risk traced back
     to an existing list component's `autoReload` default (`true`, polling the same
     request every 10 seconds for as long as a dialog stayed open), not to picker
-    pagination itself. Removed the proxy and its cache entirely; disabled `autoReload`
-    on the affected list. The generalizable shape: before adding server-side
+    pagination itself. Removed the proxy and its cache entirely. **The fix that
+    actually shipped differs from the reviewer's own suggested workaround, and is worth
+    noting as the better outcome**: rather than disabling `autoReload` (which would
+    have stopped the list from picking up changes at all), `base-collection-list` kept
+    it enabled and added its own position-indexed cache of everything already fetched,
+    so `autoReload`'s periodic re-request of an already-loaded window is served from
+    that cache instead of hitting the rate-limited external API again. Accepting the
+    reviewer's *diagnosis* (the real trigger is `autoReload`, not pagination) didn't
+    mean accepting their specific *proposed fix* verbatim — a cache solves the same
+    problem without losing the feature `autoReload` provides. The generalizable shape:
+    before adding server-side
     infrastructure to guard against a third-party rate limit, check (a) whether the API
     genuinely requires it (CORS support is a fast, concrete check), and (b) whether the
     real trigger is something narrower and already fixable client-side, like a
@@ -518,6 +528,17 @@ checkable without waiting for a live comment:
     checks) or structural per-variant branching since it was merged, rather than just a
     differing value? That's the signal to split it back apart into per-variant pieces,
     keeping only the genuinely shared shell merged (point 25).
+26. **A reviewer's own suggested fix can itself be subtly wrong — verify it, don't apply
+    it verbatim.** PR #112: a list column's index-width formula had a reviewer-suggested
+    correction that used `Math.min` where the actual intent (a minimum width that grows
+    with digit count, never shrinking below a floor) required `Math.max` — applying the
+    suggestion as written would have capped the width too small instead of guaranteeing
+    a minimum. Caught by tracing what the formula should actually guarantee before
+    typing the reviewer's wording in, not by assuming a maintainer's own suggestion is
+    automatically correct. Accepting *that a change is needed* and accepting *the exact
+    code a reviewer pasted* are two different decisions — the first is almost always
+    right to defer to, the second still needs the same scrutiny as any other line of
+    code before it's committed (point 26).
 
 Skipping this pass doesn't mean the code is wrong — it means finding out costs a full
 review round-trip (wait for the review, interpret it, fix it, reply, resolve) instead of
@@ -551,9 +572,9 @@ exactly the job it was built for: catching a point-1-shaped issue pre-review ins
 paying for it as a round-trip, on a PR where — unlike #109 — the checklist was run
 proactively from the start rather than reconstructed after the fact.
 
-**A growing list is itself worth watching**: this checklist is now 25 items, entirely
+**A growing list is itself worth watching**: this checklist is now 26 items, entirely
 because it only ever grows when a real round of feedback justifies a new line. That's
-correct for keeping it evidence-based, but a 24-item self-review pass risks becoming too
+correct for keeping it evidence-based, but a 25-item self-review pass risks becoming too
 long to actually run carefully every time — the opposite of the speed this was meant to
 buy. Point 6 already absorbed one such consolidation: three separate points about signal
 priority, all refinements of the same debate across three review rounds on the same PR,
