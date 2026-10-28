@@ -1,218 +1,204 @@
 ---
 name: tapestry-auth-providers
-description: Add a new external login provider to internetarchive/tapestry-project (ia/google today) — the full client+server+schema+deployment checklist, generalized from a real open PR (ORCID, asteasolutions/tapestry-project#76) and one reference implementation (MediaWiki OAuth) on an unmerged fork branch
+description: Add a new external login provider to asteasolutions/tapestry-project (ia/google/orcid/wikimedia/bluesky all ship today) — the full client+server+schema+deployment checklist, verified against the real ORCID and Wikimedia OAuth providers on asteasolutions/main
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["add auth provider", "new login provider", "OAuth provider tapestry", "AuthProvider", "AuthService"]
-  - keywords: ["ORCID login", "MediaWiki login", "Wikimedia OAuth", "authorization code flow"]
-  - keywords: ["VITE_AUTH_PROVIDERS", "providers-registry", "tryCompleteLogin", "updateUserIfExists", "session dto", "SessionCreateDto"]
-last_verified: 2026-09-28
+  - keywords: ["ORCID login", "MediaWiki login", "Wikimedia OAuth", "Bluesky login", "authorization code flow"]
+  - keywords: ["VITE_AUTH_PROVIDERS", "providers-registry", "tryCompleteLogin", "findUserIdOrStartRegistration", "session dto", "SessionCreateDto"]
+last_verified: 2026-10-28
 ---
 
-Checklist and patterns for adding a new external login provider to Tapestries, alongside
-the two that ship today (`ia`, `google` — see `tapestry-client-features`/
-`tapestry-server-worker`). Generalized from two OAuth-authorization-code implementations,
-at two different levels of realness — **be precise about which, when citing either**:
-
-- **ORCID** — a real, open PR against actual upstream:
-  [asteasolutions/tapestry-project#76](https://github.com/asteasolutions/tapestry-project/pull/76)
-  (`dbvisel/tapestry-project` branch `orcid-upstream`). Originally built against an older,
-  single-exclusive-provider client architecture; merged forward onto the current
-  multi-provider `VITE_AUTH_PROVIDERS`/`providers-registry.tsx` architecture (see
-  `tapestry-client-features`) as part of reconciling it with upstream `main` — the shape
-  described below is that *current*, merged-forward shape, not the PR's original commits.
-- **MediaWiki OAuth** — still only a reference implementation on an unmerged fork branch
-  (`dbvisel/tapestry-project` branch `mediawiki-login`, a single commit, never forward-merged
-  onto the current architecture). Useful for the server-side token-exchange shape (see
-  "Two token-exchange sub-cases" below) and as a second data point that the checklist
-  generalizes correctly — but don't tell a user MediaWiki login already works or exists on
-  any real branch.
+Checklist and patterns for adding a new external login provider to Tapestries. Five ship
+today: `google` (SDK credential), `ia` (credential form), `orcid` and `wikimedia` (OAuth
+2.0 authorization-code redirect, sharing real code — see below), and `bluesky` (AT
+Protocol OAuth, a distinct shape — see its own section near the end, not the checklist).
 
 ## When to use this skill
 
 - "Add \<X\> as a login option to Tapestries"
 - "How do I plug in a new OAuth provider?"
 
-## The two provider shapes
+## The provider shapes
 
-Look at how the identity provider's OAuth flow actually works before writing anything —
+Look at how the identity provider's login flow actually works before writing anything —
 it determines which existing provider to model the new one on:
 
 | Shape | Example | Client pattern | Server pattern |
 |---|---|---|---|
 | In-page popup / SDK-issued credential | `google` | SDK popup, hands a signed credential (`gsiCredential`) straight to the server | Server verifies the credential itself (`google-auth-library`), no code exchange |
 | Credential form | `ia` | Username/password form, POSTed to the server | Server calls the provider's own auth API with the credentials |
-| **OAuth 2.0 authorization-code redirect** | `orcid`, `mediawiki` (reference only) | Full-page redirect to the provider, provider redirects back with `?code=`, client hands the code to the server | Server exchanges the code for a token (and, if needed, a second call for identity) |
+| **OAuth 2.0 authorization-code redirect** | `orcid`, `wikimedia` | Full-page redirect to the provider, provider redirects back with `?code=`, client hands the code to the server | Server exchanges the code for a token (and, if needed, a second call for identity) |
+| AT Protocol OAuth (DPoP, public client) | `bluesky` | Its own flow, not the shared redirect helpers below | Receives an already-exchanged `serviceToken`, not a code |
 
 **Most new providers you'll be asked to add are the third shape** (any standard
-OAuth2/OIDC provider — ORCID, MediaWiki/Wikimedia, GitHub, ORCID-likes, etc.). The rest of
-this skill is the checklist for that shape. If the provider instead issues a client-side
-SDK credential (like Google) or is a plain credential form (like IA), look at
-`client/src/auth/google/` or `client/src/auth/internet-archive/` directly instead — the
-list below doesn't quite fit.
+OAuth2/OIDC provider — GitHub, ORCID-likes, etc.) — `orcid` and `wikimedia` both use it
+and share real code for it, described below. If the provider instead issues a
+client-side SDK credential (like Google), is a plain credential form (like IA), or is
+AT Protocol (like Bluesky), look at that provider's own files directly instead — the
+checklist below is specifically for the shared OAuth2 shape.
 
 ## Two token-exchange sub-cases
 
-Check the provider's OAuth docs for which one applies **before** writing the server
-provider — it changes the shape of `exchangeCodeForX`:
+Check the provider's OAuth docs for which one applies:
 
 - **Token endpoint returns identity directly** (ORCID: `/oauth/token`'s JSON response
-  includes `orcid` + optional `name`) → one `fetch` call.
-- **Token endpoint returns only an opaque access token** (MediaWiki: `/oauth2/access_token`
-  returns just a token) → a *second*, `Authorization: Bearer <token>`-authenticated call to
-  a profile/userinfo endpoint (MediaWiki: `oauth2/resource/profile`) to get the identity.
+  includes `orcid` + optional `name`, see `server/src/auth/providers/orcid.ts`) → one
+  `fetch` call.
+- **Token endpoint returns only an opaque access token** (Wikimedia:
+  `/w/rest.php/oauth2/access_token` returns just a token, see
+  `server/src/auth/providers/wikimedia.ts`) → a *second*, `Authorization: Bearer
+  <token>`-authenticated call to a profile endpoint
+  (`/w/rest.php/oauth2/resource/profile`) to get the identity.
 
 Either way: **key the account on the provider's stable central user id** (ORCID iD, or
-MediaWiki's `sub`), never on a mutable username — usernames can change, stable ids don't.
+Wikimedia's `sub`), never on a mutable username — usernames can change, stable ids don't.
+
+## Shared helpers — use these, don't reimplement per provider
+
+- **Server: `server/src/auth/providers/oauth.ts`** — `BaseTokenResponseSchema` (the
+  common token-response fields) and `exchangeCodeForToken({ tokenUrl, clientId,
+  clientSecret, code, redirectUri, headers? }, schema)`: POSTs
+  `application/x-www-form-urlencoded` with `grant_type=authorization_code`, throws
+  `InvalidCredentialsError` on a non-OK response, wraps unexpected errors as
+  `ServerError` (so a parse/network error never looks like a rejected login). Both
+  `orcid.ts` and `wikimedia.ts` build on this directly — extend `BaseTokenResponseSchema`
+  for provider-specific fields rather than writing a new exchange function.
+- **Client: `client/src/auth/oauth-clients.ts`** — `createOAuthClient({ authType,
+  authorizeUrl, clientId, scope?, redirectUri })` returns `{ start, tryCompleteLogin }`.
+  It generates a CSRF nonce (stored in `sessionStorage`, checked against the `state`
+  param on return), strips OAuth query params from the URL once consumed, and
+  deduplicates concurrent `tryCompleteLogin()` calls via a cached pending promise. Both
+  `client/src/auth/orcid/service.ts` and `.../wikimedia/service.ts` are a few lines each,
+  just calling this factory with their own `authorizeUrl`/`clientId`/`scope` — a new
+  OAuth2-redirect provider should do the same, not hand-roll `start`/`tryCompleteLogin`.
+- **Redirect URI is shared, not per-provider.** One `VITE_OAUTH_REDIRECT_URI` /
+  `config.redirectUri` covers every OAuth2-redirect provider (defaults to the app's own
+  origin at runtime when blank) — there's no `VITE_<X>_REDIRECT_URI`.
+- **Server: `findUserIdOrStartRegistration(where, registrationData, response,
+  suggestions)`** (`server/src/auth/index.ts`) — looks up a user by `where`; if found,
+  returns the id. If not found, it sets a short-lived (5 min) `registrationToken` cookie
+  carrying `registrationData` and throws `UserDoesNotExistError` with username/first/last
+  name suggestions, which the client's existing registration flow (`authType:
+  'registerUser'`) completes. New providers call this, not a direct update-or-404.
 
 ## The checklist
-
-Work through these in order; every one of them was touched by both reference
-implementations. Follow existing provider names/casing conventions exactly (e.g. `orcid`
-lowercase for `authType`/config keys, `Orcid` PascalCase for class names) — the codebase is
-consistent about this and mixing case breaks nothing at compile time but reads as sloppy.
 
 1. **`shared/src/data-transfer/resources/dtos/session.ts`** — add
    `LoginWith<X>Dto { authType: '<x>'; code: string; redirectUri: string }` and add it to
    the `SessionCreateDto` union.
-2. **`shared/src/data-transfer/resources/schemas/session.ts`** — add the matching member to
-   the `SessionCreateSchema` discriminated union: `z.object({ authType: z.literal('<x>'), code: z.string(), redirectUri: z.string() })`.
-3. **`server/src/config.ts`** — add `<X>_CLIENT_ID`/`<X>_CLIENT_SECRET`/`<X>_BASE_URL` (all
-   `z.string().default('')`, base URL defaulting to the provider's real endpoint) to the env
-   schema, and expose them as `config.server.<x> = { clientId, clientSecret, baseUrl }`.
-4. **`server/src/auth/tokens.ts`** — add `<x>Id: z.string().nullish()` to `RegisterJWTSchema`.
-5. **`server/prisma/schema.prisma`** — add `<x>Id String? @unique` to `User`, then generate
-   a migration (`npm run -w server prisma:migrate` or equivalent — see
-   `tapestry-server-worker` for the auto-deploy-on-boot implication of new migrations).
+2. **`shared/src/data-transfer/resources/schemas/session.ts`** — add the matching member
+   to the `SessionCreateSchema` discriminated union: `z.object({ authType:
+   z.literal('<x>'), code: z.string(), redirectUri: z.string() })`.
+3. **`server/src/config.ts`** — add `<X>_CLIENT_ID`/`<X>_CLIENT_SECRET`/`<X>_BASE_URL`
+   (all `z.string().default('')`, base URL defaulting to the provider's real endpoint) to
+   the env schema, and expose them as `config.server.<x> = { clientId, clientSecret,
+   baseUrl }`.
+4. **`server/src/auth/tokens.ts`** — add `<x>Id: z.string().nullish()` to
+   `RegisterJWTSchema`.
+5. **`server/prisma/schema.prisma`** — add `<x>Id String? @unique` to `User`, then
+   generate a migration (see `tapestry-server-worker`).
 6. **`server/src/auth/providers/<x>.ts`** — new file:
-   - A Zod schema for the token response (and, if sub-case 2, a second schema for the
-     profile response).
-   - `exchangeCodeFor<X>(code, redirectUri)`: POST to the token endpoint with
-     `client_id`/`client_secret`/`grant_type=authorization_code`/`code`/`redirect_uri` as
-     `application/x-www-form-urlencoded`; on a non-OK response throw
-     `InvalidCredentialsError`; wrap unexpected errors (`console.error` + rethrow
-     `ServerError`) — **don't let a parse/network error leak as `InvalidCredentialsError`**,
-     only an actual auth rejection should look like bad credentials to the caller.
-   - Map the result to `RegisterJWTData`: the stable id field, an email (see below), and
-     name fields.
-   - `export class <X>AuthProvider implements AuthProvider<<X>Credentials>`, `login({code, redirectUri})`
-     calls the exchange function then `updateUserIfExists({ <x>Id: id }, data)` (from
-     `server/src/auth/index.ts` — looks up by the new column, 404s via
-     `UserDoesNotExistError` if no match, else updates and returns the user id).
-   - **No email guarantee**: many providers don't return a confirmed email (ORCID's
-     `/authenticate` scope never does; MediaWiki only does when the user confirmed one).
-     Synthesize a stable, unique placeholder tied to the provider's id (e.g.
-     `${id}@<provider>.invalid` — note `.invalid` is the correct TLD for
-     "intentionally not a real address" per RFC 2606, cleaner than piggybacking on the
-     provider's real domain the way the ORCID reference does with `@orcid.org`) — never
-     leave it blank, `email` is `@unique` on `User`.
+   - A Zod schema extending `BaseTokenResponseSchema` for the token response (and, if
+     sub-case 2, a separate schema for the profile response).
+   - Build identity via `exchangeCodeForToken(...)` (and a profile `fetch` if needed).
+   - `export class <X>AuthProvider implements AuthProvider<<X>Credentials>`, `login({
+     code, redirectUri }, response)` calls the exchange, then `findUserIdOrStartRegistration({
+     <x>Id: id }, { <x>Id: id, avatar: null, ... }, response, suggestions)`.
+   - **Email is optional — `User.email` is `@unique` but nullable.** Many providers
+     don't return a confirmed email (ORCID's `/authenticate` scope never does). The real
+     precedent (`wikimedia.ts`) is to **leave it unset** rather than synthesize one: a
+     made-up placeholder still risks colliding with `@unique` if the same person later
+     links another provider using their real email. Only set a real, provider-confirmed
+     email if you have one.
 7. **`server/src/auth/providers/index.ts`** — register in `AUTH_PROVIDERS`:
-   `<x>: config.server.<x>.clientId ? new <X>AuthProvider() : unsupported`. This is why the
-   server can ship with every provider's code present but only "live" wherever its client
-   ID is actually configured — no build-time branching needed server-side.
+   `<x>: config.server.<x>.clientId ? new <X>AuthProvider() : unsupported`. This is why
+   the server can ship with every provider's code present but only "live" wherever its
+   client ID is actually configured — no build-time branching needed server-side.
 8. **`server/src/resources/sessions.ts`** — add the dispatch branch:
-   `if (request.authType === '<x>') return AUTH_PROVIDERS.<x>.login(request)`.
+   `if (request.authType === '<x>') return AUTH_PROVIDERS.<x>.login(request, response)`.
 9. **`client/src/config.ts`** — add `'<x>'` to the `AuthProviderEnum` Zod enum (this
    automatically makes it a legal value inside the comma-separated `VITE_AUTH_PROVIDERS`
-   var — no separate single-provider var to touch); add `VITE_<X>_CLIENT_ID`/
-   `VITE_<X>_BASE_URL`/`VITE_<X>_REDIRECT_URI` (base URL defaulted to the provider's real
-   endpoint, redirect URI defaulted to `''` meaning "use the app's own origin at runtime");
-   expose as `config.<x> = { clientId, baseUrl, redirectUri }`.
-10. **`client/src/auth/<x>/service.ts`** — new file. **No service class** — the shared
-    `AuthService` (`client/src/services/auth.ts`) is a single instance used by every
-    provider, not subclassed per-provider. Export two plain functions instead:
-    - `start<X>Login()`: build the authorize URL (`${baseUrl}/<authorize-path>` with
-      `client_id`/`response_type=code`/`redirect_uri` — plus any provider-specific params
-      like ORCID's `scope=/authenticate`), `window.location.assign(...)` to it. Nothing to
-      await; the navigation itself ends the current page's JS execution.
-    - `async tryComplete<X>Login(signal?): Promise<boolean>`: read `code` from
-      `new URL(window.location.href)`'s search params; return `false` immediately if
-      absent. If present: strip `code`/`error`/`error_description`/`state` from the URL via
-      `window.history.replaceState` (so a page reload doesn't try to reuse a spent code),
-      then `try { await auth.login({ authType: '<x>', code, redirectUri: redirectUri() }, signal); return true } catch (error) { if (error instanceof CanceledError) throw error; return false }`
-      — rethrow a genuine abort, but swallow an actual failed exchange and return `false` so
-      the caller falls back to the normal refresh-token flow instead of leaving the app stuck.
-    - `redirectUri()` helper: `config.<x>.redirectUri || \`${window.location.origin}/\``.
-11. **`client/src/auth/<x>/login-button.tsx`** — new file, `<X>LoginButton`: no `instanceof`
-    guard needed (there's no per-provider service to distinguish `auth` from anymore) —
-    just `<Button onClick={start<X>Login}>Sign in with <X></Button>`.
-12. **`client/src/auth/providers-registry.tsx`** — add `<X>LoginButton` and
-    `tryComplete<X>Login` to `PROVIDER_MAP`:
-    `<x>: { id: '<x>', component: <X>LoginButton, tryCompleteLogin: tryComplete<X>Login }`.
-    This is the piece that doesn't exist yet for the two real providers upstream (`ia`,
-    `google` — neither needs a redirect-resume step) — check whether `AuthProviderItem`
-    still needs a `tryCompleteLogin?: (signal?) => Promise<boolean>` field added, and
-    `AuthService.refresh()` still needs the loop that calls it before falling through to
-    the refresh-token flow:
-    ```ts
-    async refresh(loadUser: boolean, signal?: GenericAbortSignal) {
-      for (const provider of AUTH_PROVIDERS) {
-        if (await provider.tryCompleteLogin?.(signal)) return
-      }
-      await this.doLogin({ authType: 'refreshToken' }, loadUser, signal)
-    }
-    ```
-    See `tapestry-client-features` for the rest of `providers-registry.tsx`'s shape (the
-    `PROVIDER_MAP`/`AUTH_PROVIDERS` pattern this plugs into).
-13. **Deployment wiring** — every place `VITE_GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_ID` currently
-    flows needs a matching `VITE_<X>_*`/`<X>_*` entry: every `Dockerfile.client*` that builds
-    the client (`ARG VITE_<X>_CLIENT_ID` etc.), every `docker-compose*.yml` that builds it
-    (both the client's build `args:` and the server/worker's `environment:` block), and, if
-    you're using the installer described in `tapestry-local-dev-environment`, `.env.sample`
-    and `setup.sh` (a new prompt block for the new secret, plus a `set_env` call for it —
-    the provider *selection* itself needs no new gating logic, since `AUTH_PROVIDERS` is
-    already a free-form comma-separated list; just document that `<x>` is now a legal value
-    in the existing prompt's help text). Which exact files exist depends on which
-    deployment tooling your checkout has — verify with `git status`/`ls` rather than
-    assuming; see `tapestry-local-dev-environment` for why file presence varies by branch.
-    **Verified real gotcha**: a bare rename of this var (singular → plural, or any future
-    rename) is easy to apply in `client/src/config.ts` and miss in one of these
-    deployment-config copies — the client won't error, it'll just silently fall back to the
-    schema's own default provider, which looks like a working app with the wrong (or no)
-    login option rather than an obvious failure. Grep for the old name across `.env`,
-    `.env.sample`, every `docker-compose*.yml`, and every `Dockerfile.client*` after any such
-    rename, not just the one file you were editing.
+   var); add `VITE_<X>_CLIENT_ID`/`VITE_<X>_BASE_URL` (reuse the existing
+   `VITE_OAUTH_REDIRECT_URI` — don't add a per-provider one); expose as `config.<x> = {
+   clientId, baseUrl }`.
+10. **`client/src/auth/<x>/service.ts`** — new file, a few lines:
+    `export const <x>Client = createOAuthClient({ authType: '<x>', authorizeUrl:
+    \`${config.<x>.baseUrl}/<authorize-path>\`, clientId: config.<x>.clientId, scope:
+    '<if needed>', redirectUri: config.redirectUri })`. Add `'<x>'` to
+    `OAuthAuthType` in `oauth-clients.ts`.
+11. **`client/src/auth/<x>/login-button.tsx`** — new file, `<X>LoginButton`:
+    `<Button onClick={<x>Client.start}>Sign in with <X></Button>`.
+12. **`client/src/auth/providers-registry.tsx`** — add to `PROVIDER_MAP`:
+    `<x>: { id: '<x>', component: <X>LoginButton, tryCompleteLogin: <x>Client.tryCompleteLogin }`.
+    `AuthProviderItem`'s real shape is `{ id, component, prepare?, tryCompleteLogin?: ()
+    => Promise<boolean> }` (no `signal` param) — `AuthService.refresh()` already loops
+    over `AUTH_PROVIDERS` calling `tryCompleteLogin?.()` before falling through to the
+    refresh-token flow, so a new provider needs no changes there. See
+    `tapestry-client-features` for the rest of this file's shape.
+13. **Deployment wiring** — every place `VITE_GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_ID`
+    currently flows needs a matching `VITE_<X>_*`/`<X>_*` entry: every `Dockerfile.client*`
+    that builds the client, every `docker-compose*.yml` (both the client's build `args:`
+    and the server/worker's `environment:` block), and, on a checkout using the installer
+    described in `tapestry-local-dev-environment`, `.env.sample` and `setup.sh`. Which
+    exact files exist depends on your checkout — verify with `git status`/`ls` rather
+    than assuming. **Verified real gotcha**: a bare rename of this var is easy to apply
+    in `client/src/config.ts` and miss in one of these deployment-config copies — the
+    client won't error, it'll just silently fall back to the schema's default provider.
+    Grep for the old name across `.env`, `.env.sample`, every `docker-compose*.yml`, and
+    every `Dockerfile.client*` after any such rename.
 14. **Docs** — add a provider section to the README's "Authentication Providers" list
-    (one paragraph: how the flow works, which env vars to set, link to the provider's OAuth
-    docs), and consider a dedicated `<X>.md` for registration steps specific to that
-    provider's developer console — both reference implementations did this and it's a good
-    pattern to keep (IDP app registration is usually the most fiddly, least-transferable
-    part, and the part users will actually get stuck on).
+    (how the flow works, which env vars to set, link to the provider's OAuth docs).
 
-## Real gotchas hit by both reference implementations
+## Bluesky — a different shape, not this checklist
+
+`bluesky` doesn't use any of the shared helpers above. Its DTO is
+`LoginWithBlueskyDto { authType: 'bluesky'; serviceToken: string }` — the client already
+holds a completed AT Protocol session token by the time it calls the server, rather than
+handing over a `code` for the server to exchange. The identity column is
+`User.blueskyDid`. `VITE_ATPROTO_CLIENT_ID` is a public AT Protocol client id; the
+client-metadata JSON file it requires is generated by `vite.config.ts`, which scans
+`VITE_AUTH_PROVIDERS` for a `'bluesky'` substring to decide whether to emit it. Real
+files: `server/src/auth/providers/bluesky.ts`, `client/src/auth/bluesky/`
+(`client-metadata.ts`, `oauth-client.ts`, `login-button.tsx`, `login-dialog/`). Read
+those directly if asked to add another AT-Protocol-style provider — this skill doesn't
+generalize that shape.
+
+## Real gotchas
 
 - **`localhost` vs `127.0.0.1` in the redirect URI.** ORCID's developer console rejects
   `http://localhost:8080/` as a redirect URI but accepts `http://127.0.0.1:8080/`. If a
-  provider does this, you must register the `127.0.0.1` form *and* load the app at
-  `http://127.0.0.1:...` (not `localhost`) so the URI the client actually sends matches
-  what's registered, byte-for-byte, trailing slash included. Check this per-provider — don't
-  assume every OAuth provider is `localhost`-friendly.
+  provider does this, register the `127.0.0.1` form *and* load the app at
+  `http://127.0.0.1:...` (not `localhost`) so the URI the client sends matches what's
+  registered, byte-for-byte, trailing slash included. Check this per-provider.
 - **Sandbox vs production are separate credentials.** ORCID's sandbox
-  (`sandbox.orcid.org`) and production (`orcid.org`) client IDs are not interchangeable —
-  a sandbox ID only works against the sandbox base URL. If the provider has a sandbox,
-  make the base URL configurable (as both references do) rather than hardcoding production.
-- **Strip OAuth query params after consuming the code.** Without the
-  `window.history.replaceState` cleanup, reloading the page after login resends a spent
-  `code` to the server, which will reject it — surfacing as a confusing failed-login loop
-  on refresh rather than a clean logged-in state.
-- **Don't swallow `CanceledError` in `tryComplete<X>Login`.** It signals the caller
-  aborted the request (e.g. component unmounted) — rethrow it, and only return `false`
-  (falling through to the normal refresh-token flow) on an actual failed exchange.
+  (`sandbox.orcid.org`) and production (`orcid.org`) client IDs are not interchangeable.
+  Make the base URL configurable rather than hardcoding production.
+- **CSRF via `state`.** `createOAuthClient` already generates a nonce, stores it in
+  `sessionStorage`, and verifies it against the returned `state` before completing login
+  — don't bypass this by calling `auth.login(...)` directly with a raw `code`.
+- **Strip OAuth query params after consuming the code.** `createOAuthClient` already
+  does this via `window.history.replaceState`; without it, reloading the page resends a
+  spent `code`, which the server rejects — a confusing failed-login loop on refresh.
 
 ## Guardrails
 
-1. **Follow the checklist in order** — later steps (client service, login button) assume
-   earlier ones (DTO, schema, config) already compile.
-2. **Never invent a real-looking email** for a provider that doesn't supply one — use an
-   `.invalid`-TLD placeholder keyed to the provider's stable id, and say so in a comment,
-   the way both references do.
+1. **Follow the checklist in order** — later steps assume earlier ones (DTO, schema,
+   config) already compile.
+2. **Don't synthesize a placeholder email** for a provider that doesn't supply one —
+   leave it unset. `User.email` is `@unique`; a made-up value can still collide once the
+   same person links a second provider with their real email.
 3. **Key the account on the provider's stable id, not username/email** — usernames and
    even confirmed-email status can change; the id in the new `@unique` column shouldn't.
-4. **Verify which files actually exist in your checkout** before following the deployment-wiring
-   step blindly — see `tapestry-local-dev-environment` for why `Dockerfile.client-minio` /
-   `docker-compose.minio.yml` etc. are fork-specific, not universal.
-5. See `tapestry-client-features` (client-side provider-selection pattern) and
+4. **Use the shared `oauth.ts` / `oauth-clients.ts` helpers** for a new OAuth2-redirect
+   provider — don't write a new per-provider token-exchange or start/tryCompleteLogin
+   pair from scratch.
+5. **Verify which deployment files actually exist in your checkout** before following
+   the deployment-wiring step blindly — see `tapestry-local-dev-environment` for why
+   `Dockerfile.client-minio` / `docker-compose.minio.yml` etc. are fork-specific, not
+   universal.
+6. See `tapestry-client-features` (client-side provider-selection pattern) and
    `tapestry-server-worker` (server-side `AUTH_PROVIDERS` map and JWT session mechanism)
    for the surrounding architecture this checklist plugs into.

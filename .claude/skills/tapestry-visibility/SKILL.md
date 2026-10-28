@@ -7,7 +7,7 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry visibility", "make tapestry public", "Samples list", "manage-tapestry-visibility.sh"]
   - keywords: ["private link public tapestry", "TapestryVisibility enum"]
-last_verified: 2026-10-21
+last_verified: 2026-10-28
 ---
 
 Change a tapestry's visibility on a live installation from the command line, via
@@ -96,7 +96,7 @@ wrong row by id when several tapestries share a similar title.
 ## Guardrails
 
 1. **This script is VM/fork-only, not upstream** — like `docker-compose-fnf.yml`
-   itself, it's not part of `internetarchive/tapestry-project`; it assumes a
+   itself, it's not part of `asteasolutions/tapestry-project`; it assumes a
    production-style Postgres access pattern.
 2. **`public` has real reach** — it's not "shareable," it's "discoverable by
    anyone on the installation." Confirm that's actually intended before setting it,

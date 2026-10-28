@@ -1,6 +1,6 @@
 ---
 name: tapestry-server-worker
-description: Add or modify backend functionality in internetarchive/tapestry-project's server/worker — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed per-user secrets, auth providers, and Socket.io live updates
+description: Add or modify backend functionality in asteasolutions/tapestry-project's server/worker — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed per-user secrets, auth providers, and Socket.io live updates
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["tapestry-project server", "tapestry-project worker", "server/src", "REST resource", "base-resource.ts"]
   - keywords: ["Prisma", "BullMQ", "thumbnail generation", "S3 presigned URL", "MinIO", "Vault", "user secret"]
   - keywords: ["socket.io server", "tapestry-updated", "LISTEN NOTIFY", "auth provider server"]
-last_verified: 2026-08-19
+last_verified: 2026-10-28
 ---
 
 Backend conventions for `tapestry-project`'s `server`/`worker` — where things live, how
@@ -64,17 +64,17 @@ not relative paths that reach outside `server/`.
 ## Adding/changing a REST resource
 
 Every endpoint is bound through `resources/base-resource.ts`'s `bindEndpoint`, which
-calls `authenticate(req)` (see Auth below) before the handler runs. To add an endpoint:
-follow the pattern in an existing `resources/*.ts` file (e.g. `tapestries.ts`) —
-1. Define/extend the DTO + Zod schema in `shared/src/data-transfer/resources/dtos/*` and
-   `.../schemas/*`.
-2. Add the handler in the matching `server/src/resources/*.ts`, using `db.ts` (Prisma)
-   for reads/writes and a `transformers/*.ts` function to serialize the response.
-3. If the mutation should propagate live, call `socketServer.notifyTapestryUpdate(id, socketIdFromRequest(req))`
-   (see Socket.io section) — that's how `tapestries.ts`'s `update` handler does it.
-4. If it should trigger a background job (e.g. regenerating thumbnails after an edit),
-   call the relevant `scheduleXxx()` helper from `tasks/` (e.g.
-   `scheduleTapestryThumbnailGeneration(id)`), not the job handler directly.
+calls `authenticate(req)` (see Auth below) before the handler runs.
+
+The full layer-by-layer checklist (schema → DTO → endpoint → resource → access policy →
+transformer → registration → realtime → batch mutations) now lives in upstream's own
+`.claude/rules/api-contract.md`, with `.claude/skills/new-resource/` as the companion
+scaffolding skill — both shipped in `asteasolutions/tapestry-project` itself, so they
+stay in sync with the real code. Use those as the authoritative reference. One addition
+they don't cover: if the resource should trigger a background job (e.g. regenerating
+thumbnails after an edit), call the relevant `scheduleXxx()` helper from `tasks/` (e.g.
+`scheduleTapestryThumbnailGeneration(id)`), not the job handler directly — see the Job
+queue section below.
 
 ## Prisma / database
 
@@ -117,15 +117,15 @@ a handler file, add the dispatch case in `worker.ts`'s `processTask()`, and add 
 directly. Bull-Board (basic-auth via `JOBS_ADMIN_NAME`/`JOBS_ADMIN_PASSWORD`, mounted in
 `index.ts`) gives a UI over the queue — useful for debugging stuck/failed jobs locally.
 
-## S3 asset handling (LocalStack / MinIO / real S3)
+## S3 asset handling (SeaweedFS / MinIO / real S3)
 
 `server/src/services/s3-service.ts` wraps `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`.
 The `S3Client` reads `endpoint`/`region`/`credentials`/`forcePathStyle` purely from
 `config.aws` (`AWS_ENDPOINT_URL`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`,
 `AWS_S3_FORCE_PATH_STYLE` — needed for any path-style-only backend). Bucket name from
 `AWS_S3_BUCKET_NAME`. This is generic enough that it works unmodified against real AWS
-S3, upstream's suggested local emulator (LocalStack, via `AWS_ENDPOINT_URL=http://s3.localhost.localstack.cloud:4566`
-— see `tapestry-local-dev-environment`), or MinIO on a fork that uses it instead.
+S3, upstream's local store (SeaweedFS, started via `npm run s3:start` — see
+`tapestry-local-dev-environment`), or MinIO on a fork that uses it instead.
 
 Two presigned-URL flows (this is why the client talks to the S3-compatible endpoint
 **directly**, not through the server, once it has a URL — see

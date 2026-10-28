@@ -7,7 +7,7 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["frame thumbnails", "item thumbnails", "missing thumbnails", "low-res preview", "generateThumbnails", "manage-tapestry-frame-thumbnails.sh"]
   - keywords: ["frames missing previews", "backfill thumbnails", "zip import no thumbnails"]
-last_verified: 2026-08-20
+last_verified: 2026-10-28
 ---
 
 Inspect and backfill missing **frame** thumbnails on a live installation from
@@ -139,7 +139,7 @@ path calls - nothing is reimplemented in SQL or bash.
 ## Guardrails
 
 1. **This script is VM/fork-only, not upstream** - like `docker-compose-fnf.yml`
-   itself, it's not part of `internetarchive/tapestry-project`; it assumes a
+   itself, it's not part of `asteasolutions/tapestry-project`; it assumes a
    production-style Docker Compose deployment.
 2. **Frame thumbnails, not the tapestry's own thumbnail** - see the section
    above. Don't extend this script to manage `Tapestry.thumbnail` directly;

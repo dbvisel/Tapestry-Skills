@@ -1,6 +1,6 @@
 ---
 name: tapestry-client-features
-description: Add UI functionality to internetarchive/tapestry-project's client — new canvas item types, toolbar features, auth providers, and build-time config, following the existing core/core-client/client/viewer layering
+description: Add UI functionality to asteasolutions/tapestry-project's client — new canvas item types, toolbar features, auth providers, and build-time config, following the existing core/core-client/client/viewer layering
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -8,7 +8,7 @@ skill_discovery_hints:
   - keywords: ["tapestry-project client", "client/src", "stage controller", "item factory", "canvas item type"]
   - keywords: ["ItemController", "EditorItemController", "socket-manager", "tapestry-updated"]
   - keywords: ["auth provider", "VITE_AUTH_PROVIDERS", "providers-registry", "config.ts", "item toolbar"]
-last_verified: 2026-09-28
+last_verified: 2026-10-28
 ---
 
 Conventions for adding UI functionality to `tapestry-project`'s `client` — how the

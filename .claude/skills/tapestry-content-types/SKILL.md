@@ -1,6 +1,6 @@
 ---
 name: tapestry-content-types
-description: Add a new canvas content/item type to internetarchive/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format needing conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real competing PRs (HEIC image import), and a real before/after on IIIF's own rendering approach (hand-rolled OpenSeadragon wrapper vs. reusing a full third-party viewer library's own top-level component, and accepting a library bug over a partial workaround)
+description: Add a new canvas content/item type to asteasolutions/tapestry-project while changing as little as possible — the full checklist generalized from two real reference implementations (IIIF deep-zoom images, STL 3D models) on unmerged fork branches, including the easy-to-miss export-version bump and when to reuse the generic file-matching factory instead of writing a bespoke one — plus a variation for when an existing type accepts a format needing conversion before it's renderable, with client-side vs. server-side tradeoffs verified against two real competing PRs (HEIC image import), and a real before/after on IIIF's own rendering approach (hand-rolled OpenSeadragon wrapper vs. reusing a full third-party viewer library's own top-level component, and accepting a library bug over a partial workaround)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -14,7 +14,7 @@ skill_discovery_hints:
   - keywords: ["convert before create", "creating-then-patching", "pendingRequests", "DoingWorkIndicator", "insertDataTransfer"]
   - keywords: ["Clover IIIF", "full third-party viewer component", "reuse viewer library vs hand-roll", "accept known library bug", "OpenSeadragon addSimpleImage bug"]
   - keywords: ["skipSourceResolution not needed", "no server-side resolution", "which factory should own this URL", "IA image item iiif factory", "schema derivation fewest exclusions"]
-last_verified: 2026-09-16
+last_verified: 2026-10-28
 ---
 
 Checklist and minimal-diff patterns for adding a new canvas content type to Tapestries,
@@ -24,7 +24,7 @@ complete reference implementations on unmerged fork branches:
 
 - **IIIF deep-zoom image support** — originally `dbvisel/tapestry-project` branch
   `iiif-upstream` (a single clean commit directly on top of upstream
-  `internetarchive/tapestry-project` `main`, opened as
+  `asteasolutions/tapestry-project` `main`, opened as
   [PR #77](https://github.com/asteasolutions/tapestry-project/pull/77)), later reworked
   on branch `iiif-clover-viewer` to render the whole manifest — multi-canvas navigation,
   metadata, structures — via the third-party `@samvera/clover-iiif` library instead of a
@@ -39,7 +39,7 @@ complete reference implementations on unmerged fork branches:
   deliberately ignored as noise. Not present on any long-lived branch.
 
 **Neither IIIF nor `model3d` support exists on any current branch of
-`internetarchive/tapestry-project`** — both are reference examples for this skill, not
+`asteasolutions/tapestry-project`** — both are reference examples for this skill, not
 implemented features. Don't tell a user either one already works; use this as the template
 for adding a *new* type. The two examples are complementary: IIIF needed real async
 resolution logic and a dedicated item factory; `model3d` needed neither, and instead

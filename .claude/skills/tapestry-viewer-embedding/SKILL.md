@@ -1,6 +1,6 @@
 ---
 name: tapestry-viewer-embedding
-description: Package internetarchive/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code, now also published prebuilt as the @asteasolutions/tapestry-viewer npm package (the preferred way to obtain it); the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work, and verified for real in a working WordPress plugin (dbvisel/tapestry-viewer-wp-plugin)
+description: Package asteasolutions/tapestry-project's standalone /viewer app for use somewhere other than a normal website — a WordPress block, a native desktop file-opener, or anything else that needs to display a Tapestry .zip without depending on the full client/server app. The viewer itself is real upstream code, now also published prebuilt as the @asteasolutions/tapestry-viewer npm package (the preferred way to obtain it); the packaging recipe is generalized from two real custom integrations (a WordPress Gutenberg block, a macOS drag-and-drop opener) found in unmerged exploratory work, and verified for real in a working WordPress plugin (dbvisel/tapestry-viewer-wp-plugin)
 license: MIT
 compatibility: claude-code
 depends_on: []
@@ -9,7 +9,7 @@ skill_discovery_hints:
   - keywords: ["WordPress block", "Gutenberg block", "macOS app", "file:// CORS module"]
   - keywords: ["source query param", "same-origin fetch", "tapestry zip"]
   - keywords: ["@asteasolutions/tapestry-viewer", "npm install viewer", "prebuilt viewer package"]
-last_verified: 2026-09-29
+last_verified: 2026-10-28
 ---
 
 Recipe for taking `/viewer` — the standalone, read-only Tapestry viewer that already ships
@@ -27,7 +27,7 @@ work — not present on any long-lived branch:
 - **A macOS drag-and-drop opener** — an `.app` you drop an exported `.zip` onto, which opens
   it in your default browser.
 
-**Neither integration exists on any current branch of `internetarchive/tapestry-project` or
+**Neither integration exists on any current branch of `asteasolutions/tapestry-project` or
 any default fork branch** — they're reference examples for this skill's packaging pattern,
 not features to claim already exist. Don't tell a user there's an officially-shipped
 WordPress plugin or macOS app available; use this as the template for building a *new* host

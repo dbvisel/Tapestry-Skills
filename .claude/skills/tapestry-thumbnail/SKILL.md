@@ -7,7 +7,7 @@ depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry thumbnail", "card thumbnail", "dashboard preview", "Samples list thumbnail", "manage-tapestry-thumbnail.sh"]
   - keywords: ["stale tapestry thumbnail", "regenerate tapestry preview", "scheduleTapestryThumbnailGeneration"]
-last_verified: 2026-08-20
+last_verified: 2026-10-28
 ---
 
 Remake a tapestry's own **card thumbnail** on a live installation from the
@@ -117,7 +117,7 @@ or bash. (Same approach as the sibling `tapestry-frame-thumbnails` skill.)
 ## Guardrails
 
 1. **This script is VM/fork-only, not upstream** - like `docker-compose-fnf.yml`
-   itself, it's not part of `internetarchive/tapestry-project`; it assumes a
+   itself, it's not part of `asteasolutions/tapestry-project`; it assumes a
    production-style Docker Compose deployment.
 2. **Tapestry thumbnail only, not frame thumbnails** - see the section above.
    Don't extend this script to touch per-frame thumbnails; use

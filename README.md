@@ -1,7 +1,7 @@
 # Tapestry-Skills
 
 Claude Code / Claude Agent skills for working on
-[`internetarchive/tapestry-project`](https://github.com/internetarchive/tapestry-project)
+[`asteasolutions/tapestry-project`](https://github.com/asteasolutions/tapestry-project)
 ("Tapestries") — a canvas/annotation web app with a `core` / `core-client` / `client` /
 `server` / `shared` / `viewer` npm-workspaces monorepo.
 
@@ -109,13 +109,16 @@ against a from-scratch read by anyone but the agent that wrote it. Treat facts i
 as accurate as of the `last_verified` date in each `SKILL.md`'s frontmatter, and expect
 some upstream drift over time (e.g. new Prisma migrations, new item types).
 
-**`internetarchive/tapestry-project` `main` is treated as the definitive upstream
-throughout.** A personal fork (e.g. `dbvisel/tapestry-project`) carries several
-real but non-default variations across different branches — a Docker+MinIO local-dev
-installer (`dbvisel/main`), archive.org-specific production customizations including a
-hardcoded CSP (`archive-version`/`archive-version-updated`), and experimental auth
-providers on other branches that were never merged anywhere. Corrections folded in
-during review, in case future editors hit the same trap:
+**`asteasolutions/tapestry-project` `main` is treated as the definitive upstream
+throughout** — the `origin` remote in a real checkout, and the repo PRs actually go
+against. `internetarchive/tapestry-project` is IA's own fork (the `internetarchive`
+remote), not the canonical upstream, and can lag behind `asteasolutions/main`. A personal
+fork (e.g. `dbvisel/tapestry-project`) carries several real but non-default variations
+across different branches — a Docker+MinIO local-dev installer (`dbvisel/main`),
+archive.org-specific production customizations including a hardcoded CSP
+(`archive-version`/`archive-version-updated`), and experimental auth providers on other
+branches that were never merged anywhere. Corrections folded in during review, in case
+future editors hit the same trap:
 
 - The Docker+MinIO installer (`docker-compose.minio.yml`, `Dockerfile.client-minio`,
   `setup.sh`, `.env.sample`) is real and has git history, but only on a specific fork
@@ -440,3 +443,23 @@ during review, in case future editors hit the same trap:
   in place, the embedded tapestry renders). Both skills were updated to recommend the npm
   package as the default path, reserving a monorepo source build for when local/unreleased
   viewer changes are actually needed.
+- `tapestry-local-dev-environment`'s "Puppeteer thumbnail screenshots look logged-out"
+  fix (the `INTERNAL_API_URL`/host-resolver-rules mechanism, originally found and
+  verified working on the `iiif-clover-viewer` branch) was independently re-confirmed
+  **missing** on a second, unrelated checkout — `feature/openverse-import`, based on
+  upstream `main`, not the branch this was first found on — during a separate local-dev
+  thumbnail-generation investigation. The checkout had `INTERNAL_VIEWER_URL` wired up
+  but not `INTERNAL_API_URL`, reproducing the exact "logged-out homepage instead of the
+  tapestry" symptom the skill already describes. This confirms the skill's own warning
+  ("verify these files still carry it before assuming a checkout has it") is a real,
+  recurring per-checkout gap, not a one-off worth dropping from the guardrails once
+  fixed on one branch.
+- Upstream now ships its own `.claude/` tree (`settings.json`, hooks, `rules/api-contract.md`,
+  plus `bugfix`/`new-resource` and six vendored generic-methodology skills). None of it
+  collides by name with this repo's `.claude/skills/`, so it's additive in a checkout that
+  has both. One exception: `.claude/settings.json`'s deny list blocks `Bash(git push *)`,
+  `git reset --hard`, `rm -rf`, and Docker volume deletion outright — a production
+  deployment branch that needs to push from a Claude Code session will need a local
+  settings override once this merges in. `tapestry-server-worker`'s REST-resource-creation
+  steps now defer to upstream's own `.claude/rules/api-contract.md` + `new-resource` skill
+  instead of restating them.

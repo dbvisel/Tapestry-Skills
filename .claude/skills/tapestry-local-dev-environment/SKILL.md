@@ -1,21 +1,21 @@
 ---
 name: tapestry-local-dev-environment
-description: Run internetarchive/tapestry-project locally the way upstream documents (npm workspaces, per-workspace .env files, LocalStack/Redis/Vault via docker-compose.local.yml, Vite dev server) — plus notes on a Docker+MinIO installer variation that exists only on some forks
+description: Run asteasolutions/tapestry-project locally the way upstream documents (npm workspaces, per-workspace .env files, SeaweedFS/Redis/Vault via docker-compose.local.yml, Vite dev server) — plus notes on a Docker+MinIO installer variation that exists only on some forks
 license: MIT
 compatibility: claude-code
 depends_on: []
 skill_discovery_hints:
   - keywords: ["tapestry-project", "tapestries", "local dev", "run tapestry locally", "npm run local", "docker-compose.local.yml"]
-  - keywords: ["LocalStack", "Vault dev", "vite dev server", "server/.env", "client/.env"]
+  - keywords: ["SeaweedFS", "Vault dev", "vite dev server", "server/.env", "client/.env"]
   - keywords: ["MinIO installer", "setup.sh", "CSP", "Content-Security-Policy", "connect-src"]
   - keywords: ["connection refused", "ECONNREFUSED", "AWS_INTERNAL_ENDPOINT_URL", "INTERNAL_VIEWER_URL", "worker can't reach S3"]
   - keywords: ["extra_hosts host-gateway", "localhost from inside container", "musl localhost"]
   - keywords: ["tapestry screenshot shows homepage not the tapestry", "worker thumbnail screenshot logged out", "crypto.randomUUID is not a function"]
   - keywords: ["host-resolver-rules", "unsafely-treat-insecure-origin-as-secure", "VITE_API_URL unreachable from worker", "refreshToken cookie sameSite"]
-last_verified: 2026-09-14
+last_verified: 2026-10-28
 ---
 
-Run Tapestries locally. **`internetarchive/tapestry-project` (`main`) is the definitive
+Run Tapestries locally. **`asteasolutions/tapestry-project` (`main`) is the definitive
 upstream** — this skill documents that flow first. A personal fork (e.g.
 `dbvisel/tapestry-project`) may carry its own branches with real but *non-default*
 variations (a Docker+MinIO installer, archive.org-specific customizations); those are
@@ -25,7 +25,7 @@ checkout.
 ## When to use this skill
 
 - "Run tapestry-project locally" / "start Tapestry for local development"
-- Setting up Postgres/Redis/LocalStack/Vault for local dev
+- Setting up Postgres/Redis/SeaweedFS/Vault for local dev
 - Choosing/configuring an auth provider (`ia` or `google`) locally
 - Diagnosing a CSP error — see the last section; on upstream `main` this is not
   applicable, since upstream's `client/index.html` has no CSP `<meta>` tag at all
@@ -33,11 +33,11 @@ checkout.
 ## Prerequisites
 
 - Node v22+ (a version manager like `nvm` is convenient).
-- Docker, for the infrastructure containers (Postgres/Redis/LocalStack/Vault) —
+- Docker, for the infrastructure containers (Postgres/Redis/SeaweedFS/Vault) —
   `npm run *:start` scripts wrap `docker compose` for these.
 - A checkout of `tapestry-project` (this repo is fork-friendly: work happens
   against a personal fork with a remote named after your GitHub username,
-  `origin` pointing at `internetarchive/tapestry-project`).
+  `origin` pointing at `asteasolutions/tapestry-project`).
 
 ## 1. Install and configure
 
@@ -66,22 +66,20 @@ Root `package.json` provides npm scripts that wrap `docker compose -f
 docker-compose.local.yml --env-file ./server/.env up -d --build <service>`:
 
 ```bash
-npm run local              # shorthand for db:start + redis:start + vault:start
-npm run localstack:start   # S3-compatible storage emulator (see note below)
+npm run local       # shorthand for db:start + redis:start + vault:start
+npm run s3:start     # SeaweedFS as a persistent S3-compatible store (see note below)
 ```
 
-Individually: `db:start`, `redis:start`, `localstack:start`, `vault:start`,
+Individually: `db:start`, `redis:start`, `s3:start`, `vault:start`,
 `worker:start` (plus matching `*:logs` for each).
 
 - **Postgres** — standard, matches `server/.env`'s `DB_*` vars.
 - **Redis 7** — used for caching and BullMQ job scheduling (see
   `tapestry-server-worker`).
-- **LocalStack** — upstream's recommended local S3 emulator, **not MinIO**.
-  `AWS_ENDPOINT_URL=http://s3.localhost.localstack.cloud:4566` (already set in
-  `server/.env.example`). **The free tier doesn't persist data — restarting
-  the container wipes all Tapestry assets.** MinIO is mentioned in upstream's
-  README only as "another alternative... or any other S3-compatible service,"
-  not as something upstream actually wires up anywhere.
+- **SeaweedFS** — upstream's local S3-compatible store, **not MinIO or
+  LocalStack**. `npm run s3:start` also creates the bucket and its CORS rules.
+  Unlike LocalStack's free tier (upstream's previous local S3 story), data
+  **persists** across restarts.
 - **Vault** — optional. Uses `deployment/vault/start-dev.sh` (a real, upstream
   dev-mode script: `vault server -dev` with a hardcoded root token, then seeds
   an AppRole policy scoped to `secret/data/users/*` from `VAULT_ROLE_ID`/
@@ -134,7 +132,7 @@ is "often more convenient."
 
 ## No CSP issue on upstream
 
-Upstream's `client/index.html` (checked `internetarchive/tapestry-project`
+Upstream's `client/index.html` (checked `asteasolutions/tapestry-project`
 `main`) has **no `Content-Security-Policy` meta tag at all** — nothing to
 violate, nothing to patch. If you're hitting CSP errors on `localhost`, you
 are not on a plain upstream checkout; see the next section.
@@ -145,9 +143,9 @@ Some forks (e.g. a `dbvisel/main` branch, ~20 commits ahead of upstream `main`)
 add an alternative, fully-Dockerized local-dev path: `setup.sh`, a single
 root `.env.sample`/`.env` (instead of per-workspace `server/.env`/`client/.env`),
 `docker-compose.minio.yml`, and `Dockerfile.client-minio` — using MinIO instead
-of LocalStack, and building the client into an nginx image instead of running
+of SeaweedFS, and building the client into an nginx image instead of running
 Vite dev server. If you have these files, they are **not part of
-`internetarchive/tapestry-project`** — they're a specific fork's addition. This
+`asteasolutions/tapestry-project`** — they're a specific fork's addition. This
 skill bundles copies if you need them: `scripts/setup.sh` is interactive
 (`./setup.sh` or `./setup.sh --no-start`), regenerates missing secrets, and
 idempotently re-runs against an existing `.env`; the config templates it reads
@@ -312,17 +310,16 @@ third-party content.
 
 ## Guardrails
 
-1. **Treat `internetarchive/tapestry-project` `main` as ground truth.** Verify
+1. **Treat `asteasolutions/tapestry-project` `main` as ground truth.** Verify
    any fork-specific claim (file presence, CSP, installer scripts) against the
    actual branch/checkout in front of you before assuming it generalizes.
 2. **Env files are per-workspace upstream** (`server/.env`, `client/.env`) —
    don't assume a single root `.env` unless you've confirmed you're on a fork
    variation that uses one.
-3. **LocalStack, not MinIO, is upstream's local S3 story** — and it doesn't
-   persist across restarts on the free tier. Don't assume asset data survives
-   a `localstack:start` restart.
-4. **Only `ia` and `google` are real auth providers**, on any branch checked
-   so far.
+3. **SeaweedFS, not MinIO or LocalStack, is upstream's local S3 story** — and
+   unlike LocalStack's free tier, it persists across restarts.
+4. **`ia`, `google`, `orcid`, `wikimedia`, and `bluesky` are all real auth
+   providers on upstream `main`** — see `tapestry-auth-providers`.
 5. **Don't rename the checkout directory** if using Docker Compose for
    anything — Compose derives the project/volume names from it, and renaming
    orphans existing data into fresh empty volumes.
