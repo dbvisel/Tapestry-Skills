@@ -42,7 +42,7 @@ separate from the `tapestry-project` checkout it operates on.
 
 | Skill | Covers |
 |---|---|
-| [`tapestry-local-dev-environment`](.claude/skills/tapestry-local-dev-environment/SKILL.md) | Running the app locally the way upstream documents it (npm workspaces, per-workspace `.env` files, LocalStack/Redis/Vault via `docker-compose.local.yml`, Vite dev server) — plus a clearly-separated note on a Docker+MinIO installer variation that exists only on some forks, the CSP issue that only shows up there, and real Puppeteer-screenshot gotchas on that same installer (cookie scoping, a Chromium secure-context flag, host-resolver-rules vs. request interception) |
+| [`tapestry-local-dev-environment`](.claude/skills/tapestry-local-dev-environment/SKILL.md) | Running the app locally the way upstream documents it (npm workspaces, per-workspace `.env` files, SeaweedFS/Redis/Vault via `docker-compose.local.yml`, Vite dev server) |
 | [`tapestry-multi-checkout-workflow`](.claude/skills/tapestry-multi-checkout-workflow/SKILL.md) | Working across several open `tapestry-project` PRs at once with one checkout (or `git worktree`) per PR, each intentionally parked on its own branch — verified gotchas on remote-naming inconsistency between checkouts, a worktree's `.git` living in a different directory than its working tree, and syncing a fork's `main` without destroying its own commits |
 | [`tapestry-client-features`](.claude/skills/tapestry-client-features/SKILL.md) | Adding UI functionality in `client`/`core-client` — canvas item types, the controller/manager pattern, auth providers, live updates, build-time config |
 | [`tapestry-server-worker`](.claude/skills/tapestry-server-worker/SKILL.md) | Adding backend functionality — REST resources, Prisma models/migrations, BullMQ jobs, S3/MinIO presigning, Vault-backed secrets, Socket.io fan-out |
@@ -230,26 +230,13 @@ future editors hit the same trap:
   only"). Both rounds' feedback was generalized out into a new skill,
   `tapestry-pr-conventions`, rather than left buried in one skill's history — real, verified
   signal from the actual gatekeeper who reviews PRs here, not invented best practice.
-- `tapestry-local-dev-environment`'s `AWS_INTERNAL_ENDPOINT_URL` previously described a
-  mechanism that **did not actually exist**: the `.env.sample`/`docker-compose.minio.yml`
-  this skill bundles set the variable, but nothing in `server/src/config.ts` or
-  `s3-service.ts` ever read it — a documentation-only fix that was never wired up or
-  verified against the real app. Discovered the hard way in a real session building a new
-  feature (HEIC image import) that, for the first time, actually depended on the worker
-  successfully self-fetching from S3 — every prior use of that code path (thumbnail
-  generation) fails silently on this exact gap, so nobody had noticed. Corrected to the
-  real, verified fix: `docker-compose.minio.yml`'s `worker` service overrides
-  `AWS_ENDPOINT_URL`/adds `VIEWER_URL` via Compose-level fallback interpolation
-  (`${AWS_INTERNAL_ENDPOINT_URL:-${AWS_ENDPOINT_URL}}`), not application code — confirmed
-  with real `curl`/`wget` tests from inside the containers, both before (connection
-  refused) and after (200 OK) the fix. Also ruled out, empirically, a tempting
-  zero-config alternative (`extra_hosts: ["localhost:host-gateway"]`) that turns out not to
-  work on this project's actual Alpine/musl-based images even though it works on a plain
-  `alpine:latest` image — see the skill's new "Internal vs. browser-facing addresses"
-  section. The broader lesson: a fix added only to bundled documentation/config files,
-  never exercised against the real running app, isn't verified just because it looks
-  reasonable — the same standard this repo already applies to bundled scripts ("run it for
-  real before calling it done") applies to config templates too.
+- `tapestry-local-dev-environment` no longer documents a Docker+MinIO installer
+  variation. That installer (`docker-compose.minio.yml`, `Dockerfile.client-minio`,
+  `setup.sh`, root `.env.sample`) only ever existed as fork-specific commits on
+  `dbvisel/main`; as of 2026-11-11 `dbvisel/main` was retired to be an exact mirror of
+  `asteasolutions/main`, so the installer no longer exists anywhere and the skill (and
+  its bundled `assets/`/`scripts/`) were trimmed to match. Local dev is upstream's plain
+  flow only: per-workspace `.env` files, SeaweedFS via `docker-compose.local.yml`.
 - `tapestry-content-types` gained a variation section from the same HEIC image-import
   session, but built from a genuinely different kind of case than IIIF/`model3d`: it adds
   **no new item type at all** — the existing `image` type accepts a format (HEIC) the
